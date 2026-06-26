@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PrintCenter Pro | Gerenciamento de Impressoras</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --bg-base: #0a0f16;
+            --bg-surface: #111923;
+            --bg-card: #182230;
+            --bg-hover: #1f2d3d;
+            --bg-input: #141e2b;
+            --border: #263240;
+            --border-light: #304050;
+            --text-primary: #e8edf4;
+            --text-secondary: #a0b4c8;
+            --text-muted: #6b8098;
+            --accent: #3b8beb;
+            --accent-glow: rgba(59,139,235,0.25);
+            --green: #22c55e; --green-bg: rgba(34,197,94,0.1);
+            --yellow: #eab308; --yellow-bg: rgba(234,179,8,0.1);
+            --red: #ef4444; --red-bg: rgba(239,68,68,0.1);
+            --purple: #a855f7; --purple-bg: rgba(168,85,247,0.12);
+            --radius: 10px; --radius-lg: 16px; --radius-xl: 20px;
+            --shadow-card: 0 2px 8px rgba(0,0,0,0.3);
+            --shadow-lg: 0 12px 32px rgba(0,0,0,0.5);
+            --transition: 0.2s cubic-bezier(0.4,0,0.2,1);
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'Inter','Segoe UI',system-ui,-apple-system,sans-serif; background:var(--bg-base); color:var(--text-primary); display:flex; height:100vh; overflow:hidden; letter-spacing:-0.01em; }
+
+        /* SIDEBAR */
+        .sidebar { width:240px; min-width:240px; background:var(--bg-surface); border-right:1px solid var(--border); display:flex; flex-direction:column; z-index:100; }
+        .sidebar-brand { padding:18px 16px; display:flex; align-items:center; gap:12px; border-bottom:1px solid var(--border); }
+        .brand-icon { width:40px; height:40px; background:linear-gradient(135deg,var(--accent),#6366f1); border-radius:var(--radius); display:flex; align-items:center; justify-content:center; font-size:1.1rem; color:#fff; box-shadow:0 4px 16px var(--accent-glow); flex-shrink:0; }
+        .brand-text { font-weight:700; font-size:1rem; line-height:1.2; }
+        .brand-text small { font-weight:400; font-size:0.62rem; color:var(--text-muted); display:block; letter-spacing:0.06em; text-transform:uppercase; }
+        .sidebar-nav { flex:1; padding:10px 8px; display:flex; flex-direction:column; gap:2px; overflow-y:auto; }
+        .nav-label { font-size:0.58rem; text-transform:uppercase; letter-spacing:0.1em; color:var(--text-muted); padding:12px 10px 4px; font-weight:700; }
+        .sidebar-nav a { display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:var(--radius); color:var(--text-secondary); text-decoration:none; font-weight:500; font-size:0.84rem; transition:all var(--transition); cursor:pointer; }
+        .sidebar-nav a:hover { background:var(--bg-hover); color:var(--text-primary); }
+        .sidebar-nav a.active { background:var(--accent); color:#fff; font-weight:600; box-shadow:0 4px 14px var(--accent-glow); }
+        .sidebar-nav a i { width:16px; text-align:center; font-size:0.9rem; }
+        .badge { margin-left:auto; background:var(--red); color:#fff; font-size:0.62rem; padding:2px 7px; border-radius:20px; font-weight:700; }
+        .badge.zero { display:none; }
+        .sidebar-footer { padding:12px; border-top:1px solid var(--border); }
+
+        /* MAIN */
+        .main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+        .topbar { background:var(--bg-surface); border-bottom:1px solid var(--border); padding:12px 22px; display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:58px; }
+        .topbar .page-title { font-weight:700; font-size:1.05rem; white-space:nowrap; }
+        .search-wrap { display:flex; align-items:center; background:var(--bg-input); border:1px solid var(--border); border-radius:30px; padding:8px 14px; gap:9px; flex:0 1 380px; transition:all var(--transition); }
+        .search-wrap:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow); }
+        .search-wrap input { background:transparent; border:none; color:var(--text-primary); font-size:0.85rem; outline:none; width:100%; }
+        .search-wrap input::placeholder { color:var(--text-muted); }
+        .topbar-actions { display:flex; gap:8px; align-items:center; }
+        .icon-btn { width:34px; height:34px; border-radius:50%; background:var(--bg-card); border:1px solid var(--border); color:var(--text-secondary); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all var(--transition); font-size:0.85rem; }
+        .icon-btn:hover { background:var(--bg-hover); color:var(--text-primary); }
+        .avatar-sm { width:34px; height:34px; border-radius:50%; background:linear-gradient(135deg,#6366f1,#8b5cf6); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:0.75rem; color:#fff; cursor:pointer; }
+
+        /* CONTENT */
+        .content { flex:1; overflow-y:auto; padding:20px 22px; display:flex; flex-direction:column; gap:18px; }
+        .content::-webkit-scrollbar { width:4px; }
+        .content::-webkit-scrollbar-thumb { background:var(--border); border-radius:8px; }
+
+        .stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; flex-shrink:0; }
+        .stat-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:16px 18px; display:flex; align-items:center; gap:12px; cursor:pointer; transition:all var(--transition); }
+        .stat-card:hover { border-color:var(--border-light); transform:translateY(-1px); box-shadow:var(--shadow-lg); }
+        .stat-icon { width:44px; height:44px; border-radius:var(--radius); display:flex; align-items:center; justify-content:center; font-size:1.1rem; flex-shrink:0; }
+        .stat-icon.blue { background:rgba(59,139,235,0.12); color:var(--accent); }
+        .stat-icon.green { background:var(--green-bg); color:var(--green); }
+        .stat-icon.yellow { background:var(--yellow-bg); color:var(--yellow); }
+        .stat-icon.purple { background:var(--purple-bg); color:var(--purple); }
+        .stat-icon.red { background:var(--red-bg); color:var(--red); }
+        .stat-info .val { font-size:1.4rem; font-weight:700; line-height:1; }
+        .stat-info .lbl { font-size:0.74rem; color:var(--text-muted); margin-top:3px; }
+
+        .panel { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; flex-shrink:0; }
+        .panel-header { padding:14px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+        .panel-header h3 { font-weight:700; font-size:0.9rem; }
+
+        .btn { padding:7px 14px; border-radius:22px; font-weight:600; font-size:0.76rem; cursor:pointer; border:none; transition:all var(--transition); display:inline-flex; align-items:center; gap:6px; white-space:nowrap; letter-spacing:0.02em; }
+        .btn-primary { background:var(--accent); color:#fff; box-shadow:0 2px 8px var(--accent-glow); }
+        .btn-primary:hover { background:#4d95f0; }
+        .btn-primary:disabled { opacity:0.6; cursor:not-allowed; }
+        .btn-success { background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; box-shadow:0 2px 8px rgba(22,163,74,0.3); }
+        .btn-success:hover { box-shadow:0 4px 16px rgba(22,163,74,0.45); }
+        .btn-outline { background:transparent; border:1px solid var(--border-light); color:var(--text-secondary); }
+        .btn-outline:hover { background:var(--bg-hover); color:var(--text-primary); }
+        .btn-danger { background:var(--red-bg); color:var(--red); border:1px solid var(--red-bg); }
+        .btn-danger:hover { background:var(--red); color:#fff; }
+        .btn-sm { padding:4px 10px; font-size:0.7rem; border-radius:16px; }
+        .btn-icon { background:transparent; border:none; color:var(--text-muted); cursor:pointer; padding:4px 7px; border-radius:6px; transition:all var(--transition); font-size:0.85rem; }
+        .btn-icon:hover { background:var(--bg-hover); color:var(--text-primary); }
+        .btn-icon.danger:hover { background:var(--red-bg); color:var(--red); }
+
+        .filter-pills { display:flex; gap:4px; background:var(--bg-input); border-radius:24px; padding:3px; }
+        .filter-pill { padding:5px 12px; border-radius:20px; font-size:0.74rem; cursor:pointer; border:none; background:transparent; color:var(--text-muted); font-weight:500; transition:all var(--transition); }
+        .filter-pill.active { background:var(--accent); color:#fff; font-weight:600; }
+
+        .table-wrap { overflow-x:auto; }
+        table { width:100%; border-collapse:collapse; font-size:0.8rem; }
+        table thead th { background:var(--bg-surface); padding:10px 12px; text-align:left; font-weight:600; color:var(--text-muted); font-size:0.67rem; text-transform:uppercase; letter-spacing:0.06em; border-bottom:1px solid var(--border); white-space:nowrap; }
+        table tbody td { padding:11px 12px; border-bottom:1px solid var(--border); color:var(--text-secondary); white-space:nowrap; vertical-align:middle; }
+        table tbody tr { transition:background var(--transition); }
+        table tbody tr:hover { background:var(--bg-hover); }
+        table tbody tr:last-child td { border-bottom:none; }
+
+        .dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:4px; }
+        .dot.online { background:var(--green); box-shadow:0 0 5px var(--green); }
+        .dot.offline { background:var(--red); }
+        .dot.warning { background:var(--yellow); }
+        .tag { display:inline-block; padding:3px 9px; border-radius:14px; font-size:0.67rem; font-weight:600; }
+        .tag-green { background:var(--green-bg); color:var(--green); }
+        .tag-red { background:var(--red-bg); color:var(--red); }
+        .tag-yellow { background:var(--yellow-bg); color:var(--yellow); }
+        .tag-purple { background:var(--purple-bg); color:var(--purple); }
+        .tag-blue { background:rgba(59,139,235,0.12); color:var(--accent); }
+
+        /* TOGGLE */
+        .toggle { position:relative; display:inline-block; width:38px; height:20px; }
+        .toggle input { opacity:0; width:0; height:0; }
+        .toggle-slider { position:absolute; cursor:pointer; inset:0; background:var(--bg-input); border:1px solid var(--border); border-radius:20px; transition:0.3s; }
+        .toggle-slider:before { content:""; position:absolute; width:14px; height:14px; left:2px; top:2px; background:var(--text-muted); border-radius:50%; transition:0.3s; }
+        input:checked + .toggle-slider { background:var(--green); border-color:var(--green); }
+        input:checked + .toggle-slider:before { transform:translateX(18px); background:#fff; }
+
+        /* AGENT STATUS CARD */
+        .agent-card { display:flex; align-items:center; gap:12px; padding:12px 16px; background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--radius-lg); flex-shrink:0; }
+        .agent-pulse { width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+        .agent-pulse.online { background:var(--green); box-shadow:0 0 0 4px rgba(34,197,94,0.2); animation:pulse 2s infinite; }
+        .agent-pulse.offline { background:var(--red-bg); border:2px solid var(--red); }
+        @keyframes pulse { 0%,100%{box-shadow:0 0 0 4px rgba(34,197,94,0.2)} 50%{box-shadow:0 0 0 8px rgba(34,197,94,0.05)} }
+
+        /* CHART */
+        .chart-box { padding:16px; background:var(--bg-surface); border-top:1px solid var(--border); height:220px; position:relative; }
+
+        /* MODAL */
+        .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:999; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.25s; }
+        .modal-overlay.active { opacity:1; pointer-events:auto; }
+        .modal { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-xl); width:92%; max-width:680px; max-height:88vh; overflow-y:auto; box-shadow:var(--shadow-lg); transform:translateY(20px); transition:transform 0.25s; }
+        .modal-overlay.active .modal { transform:translateY(0); }
+        .modal-sm { max-width:420px; }
+        .modal-header { padding:16px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; background:var(--bg-card); z-index:5; border-radius:var(--radius-xl) var(--radius-xl) 0 0; }
+        .modal-header h2 { font-weight:700; font-size:0.95rem; }
+        .modal-close { width:30px; height:30px; border-radius:50%; border:none; background:var(--bg-hover); color:var(--text-secondary); cursor:pointer; transition:all var(--transition); display:flex; align-items:center; justify-content:center; }
+        .modal-close:hover { background:var(--red-bg); color:var(--red); }
+        .modal-body { padding:18px 20px; }
+
+        .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+        .form-group { margin-bottom:12px; }
+        .form-group label { display:block; font-size:0.74rem; font-weight:600; color:var(--text-secondary); margin-bottom:4px; }
+        .form-group input, .form-group select { width:100%; padding:9px 12px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius); color:var(--text-primary); font-size:0.83rem; outline:none; transition:all var(--transition); }
+        .form-group input:focus, .form-group select:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow); }
+        .form-group.full { grid-column:1/-1; }
+
+        .detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+        .detail-item { background:var(--bg-surface); padding:10px 12px; border-radius:var(--radius); border:1px solid var(--border); }
+        .detail-item .lbl { font-size:0.62rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); margin-bottom:2px; font-weight:600; }
+        .detail-item .val { font-weight:600; color:var(--text-primary); font-size:0.85rem; }
+
+        /* TOAST */
+        .toast { position:fixed; bottom:24px; right:24px; background:var(--bg-card); border:1px solid var(--border); color:var(--text-primary); padding:11px 20px; border-radius:28px; font-weight:600; font-size:0.82rem; z-index:9999; box-shadow:var(--shadow-lg); opacity:0; transform:translateY(20px); transition:all 0.3s; pointer-events:none; max-width:360px; }
+        .toast.show { opacity:1; transform:translateY(0); }
+        .toast.success { border-color:var(--green); }
+        .toast.error { border-color:var(--red); }
+
+        /* SPINNER */
+        .spin { display:inline-block; animation:spin 1s linear infinite; }
+        @keyframes spin { to { transform:rotate(360deg); } }
+
+        /* IP EDIT inline */
+        .ip-edit-wrap { display:flex; align-items:center; gap:6px; }
+        .ip-edit-wrap input { background:var(--bg-input); border:1px solid var(--accent); border-radius:6px; color:var(--text-primary); padding:3px 7px; font-size:0.78rem; width:130px; outline:none; }
+
+        @media(max-width:1100px) {
+            .stats-grid { grid-template-columns:repeat(2,1fr); }
+            .detail-grid { grid-template-columns:1fr; }
+            .form-grid { grid-template-columns:1fr; }
+        }
+        @media(max-width:768px) {
+            .sidebar { width:56px; min-width:56px; }
+            .brand-text, .sidebar-nav a span, .nav-label, .badge { display:none; }
+            .sidebar-nav a { justify-content:center; padding:10px; }
+            .sidebar-brand { justify-content:center; }
+            .content { padding:10px; }
+            .topbar { padding:8px 12px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-icon"><i class="fas fa-print"></i></div>
+            <div class="brand-text">PrintCenter<small>Pro</small></div>
+        </div>
+        <nav class="sidebar-nav">
+            <div class="nav-label">Principal</div>
+            <a class="active" data-page="dashboard" onclick="goTo('dashboard')"><i class="fas fa-th-large"></i> <span>Dashboard</span></a>
+            <a data-page="clients" onclick="goTo('clients')"><i class="fas fa-building"></i> <span>Clientes</span></a>
+            <a data-page="printers" onclick="goTo('printers')"><i class="fas fa-print"></i> <span>Impressoras</span> <span class="badge" id="badgePrinters">0</span></a>
+            <div class="nav-label">Monitoramento</div>
+            <a data-page="alerts" onclick="goTo('alerts')"><i class="fas fa-bell"></i> <span>Alertas</span> <span class="badge" id="badgeAlerts">0</span></a>
+            <a data-page="reports" onclick="goTo('reports')"><i class="fas fa-chart-bar"></i> <span>Relatórios</span></a>
+            <a data-page="settings" onclick="goTo('settings')"><i class="fas fa-cog"></i> <span>Configurações</span></a>
+        </nav>
+    </aside>
+
+    <!-- MAIN -->
+    <div class="main">
+        <header class="topbar">
+            <div class="page-title" id="pageTitle">📊 Dashboard</div>
+            <div class="search-wrap">
+                <i class="fas fa-search" style="color:var(--text-muted)"></i>
+                <input type="text" id="globalSearch" placeholder="Buscar impressoras, clientes, IP..." oninput="handleSearch()">
+            </div>
+            <div class="topbar-actions">
+                <button class="icon-btn" title="Notificações" onclick="goTo('alerts')"><i class="fas fa-bell"></i></button>
+                <button class="icon-btn" title="Atualizar dados" onclick="refreshNow()"><i class="fas fa-sync-alt"></i></button>
+                <div class="avatar-sm">AD</div>
+            </div>
+        </header>
+        <div class="content" id="contentArea"></div>
+    </div>
+
+    <!-- MODAL: Impressora -->
+    <div class="modal-overlay" id="modalPrinter">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modalPrinterTitle">🖨️ Detalhes da Impressora</h2>
+                <button class="modal-close" onclick="closeModal('modalPrinter')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" id="modalPrinterBody"></div>
+        </div>
+    </div>
+
+    <!-- MODAL: Cliente -->
+    <div class="modal-overlay" id="modalClient">
+        <div class="modal modal-sm" style="max-width:560px;">
+            <div class="modal-header">
+                <h2 id="modalClientTitle">👤 Novo Cliente</h2>
+                <button class="modal-close" onclick="closeModal('modalClient')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="clientForm" onsubmit="saveClient(event)">
+                    <input type="hidden" id="clientId">
+                    <div class="form-grid">
+                        <div class="form-group"><label>Nome *</label><input type="text" id="clientName" required placeholder="Empresa ABC"></div>
+                        <div class="form-group"><label>CNPJ/CPF</label><input type="text" id="clientDoc" placeholder="00.000.000/0000-00"></div>
+                        <div class="form-group"><label>E-mail</label><input type="email" id="clientEmail" placeholder="email@empresa.com"></div>
+                        <div class="form-group"><label>Telefone</label><input type="text" id="clientPhone" placeholder="(11) 99999-9999"></div>
+                        <div class="form-group full"><label>Endereço</label><input type="text" id="clientAddress" placeholder="Rua, número, cidade - UF"></div>
+                        <div class="form-group full"><label>Plano</label><select id="clientPlan"><option value="basic">Básico</option><option value="pro">Profissional</option><option value="enterprise">Enterprise</option></select></div>
+                    </div>
+                    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;">
+                        <button type="button" class="btn btn-outline" onclick="closeModal('modalClient')">Cancelar</button>
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Editar IP -->
+    <div class="modal-overlay" id="modalEditIp">
+        <div class="modal modal-sm" style="max-width:360px;">
+            <div class="modal-header">
+                <h2>🌐 Alterar IP da Impressora</h2>
+                <button class="modal-close" onclick="closeModal('modalEditIp')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editIpPrinterId">
+                <div class="form-group"><label>Novo Endereço IP</label><input type="text" id="editIpValue" placeholder="192.168.1.100" oninput="validateIp(this)"></div>
+                <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('modalEditIp')">Cancelar</button>
+                    <button id="saveIpBtn" class="btn btn-primary" onclick="saveIp()"><i class="fas fa-save"></i> Salvar IP</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Bilhetagem -->
+    <div class="modal-overlay" id="modalBilhetagem">
+        <div class="modal" style="max-width:800px;">
+            <div class="modal-header">
+                <h2>📄 Bilhetagem & Regras</h2>
+                <div class="filter-pills" id="bilhetagemTabs" style="margin-left: 20px;">
+                    <button class="filter-pill active" onclick="switchBilhetagemTab('history', this)">Histórico de Impressões</button>
+                    <button class="filter-pill" onclick="switchBilhetagemTab('quotas', this)">Cotas e Limites</button>
+                    <button class="filter-pill" onclick="switchBilhetagemTab('reports', this)">Relatórios Gerenciais</button>
+                </div>
+                <button class="modal-close" onclick="closeModal('modalBilhetagem')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" id="bilhetagemContent" style="padding:20px;">
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+    // ========== ESTADO GLOBAL ==========
+    const API_BASE = "http://" + window.location.hostname + ":5000/api";
+    let clients   = [];
+    let printers  = [];
+    let printJobs = [];
+    let currentPage     = 'dashboard';
+    let currentClientId = null;
+    let currentFilter   = 'all';
+    let scanningClientId = null;
+    let agentStatuses   = {}; // { clientId: { isOnline, lastSeen } }
+
+    // Instâncias de gráficos vivos (para update sem re-render)
+    let _historyChart = null;
+    let _clientChart  = null;
+
+    // ========== CARREGAMENTO DE DADOS (sem re-render completo) ==========
+    async function fetchData() {
+        try {
+            const [cRes, pRes] = await Promise.all([
+                fetch(`${API_BASE}/clients`),
+                fetch(`${API_BASE}/printers`)
+            ]);
+            clients  = await cRes.json();
+            printers = await pRes.json();
+            updateBadges();
+
+            if (document.querySelector('.modal-overlay.active')) return; // Previne flicker
+
+            // Se estiver num client-detail, atualiza apenas métricas e gráfico
+            if (currentPage === 'client-detail' && currentClientId) {
+                // Removido updateClientDetailMetrics para não piscar o conteúdo
+                updateClientChartData(currentClientId);
+                fetchAgentStatus(currentClientId);
+            } else {
+                render();
+            }
+        } catch(e) {
+            console.warn("API indisponível:", e.message);
+        }
+    }
+
+    async function fetchJobsIfNeeded() {
+        if (currentPage !== 'reports') return;
+        try {
+            const res = await fetch(`${API_BASE}/printjobs`);
+            printJobs = await res.json();
+            render();
+        } catch {}
+    }
+
+    async function fetchAgentStatus(clientId) {
+        try {
+            const res = await fetch(`${API_BASE}/agent/${clientId}/status`);
+            const data = await res.json();
+            agentStatuses[clientId] = data;
+            updateAgentStatusCard(clientId);
+        } catch {}
+    }
+
+    let userQuotas = [];
+
+    window.openBilhetagemModal = async function(clientId) {
+        currentClientId = clientId;
+        document.getElementById('modalBilhetagem').classList.add('active');
+        document.getElementById('bilhetagemContent').innerHTML = '<div style="text-align:center;padding:30px"><i class="fas fa-circle-notch spin"></i> Carregando...</div>';
+        
+        try {
+            const resJobs = await fetch(`${API_BASE}/clients/${clientId}/jobs`);
+            printJobs = await resJobs.json();
+            switchBilhetagemTab('history');
+        } catch {
+            toast('Erro ao carregar bilhetagem', 'error');
+        }
+    };
+
+    // ========== NAVEGAÇÃO ==========
+    function goTo(page, clientId = null) {
+        currentPage     = page;
+        currentClientId = clientId;
+        currentFilter   = 'all';
+        document.getElementById('globalSearch').value = '';
+        document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
+        const target = page === 'client-detail' ? 'clients' : page;
+        document.querySelector(`.sidebar-nav a[data-page="${target}"]`)?.classList.add('active');
+
+        const titles = {
+            dashboard: '📊 Dashboard Geral', clients: '👥 Clientes',
+            printers: '🖨️ Impressoras', bilhetagem: '📄 Bilhetagem & Regras',
+            alerts: '🔔 Alertas', reports: '📈 Relatórios',
+            settings: '⚙️ Configurações', 'client-detail': '📋 Dashboard do Cliente'
+        };
+        document.getElementById('pageTitle').textContent = titles[page] || page;
+
+        if (page === 'reports') fetchJobsIfNeeded();
+        render();
+
+        if (page === 'client-detail' && clientId) {
+            fetchAgentStatus(clientId);
+            setTimeout(() => renderClientChart(clientId), 100);
+        }
+    }
+
+    function render() {
+        const area = document.getElementById('contentArea');
+        switch (currentPage) {
+            case 'dashboard':      area.innerHTML = renderDashboard(); break;
+            case 'clients':        area.innerHTML = renderClientsPage(); break;
+            case 'printers':       area.innerHTML = renderFilterablePage('🖨️ Impressoras Monitoradas'); break;
+            case 'alerts':         area.innerHTML = renderAlertsPage(); break;
+            case 'reports':        area.innerHTML = renderReportsPage(); break;
+            case 'settings':       area.innerHTML = renderSettingsPage(); break;
+            case 'client-detail':  area.innerHTML = renderClientDetail(currentClientId); break;
+            default:               area.innerHTML = `<div class="panel"><div class="panel-header"><h3>${currentPage}</h3></div><div style="padding:40px;text-align:center;color:var(--text-muted)">Em breve...</div></div>`;
+        }
+        bindFilterEvents();
+    }
+
+    function updateBadges() {
+        const total = printers.length;
+        const alerts = printers.filter(p => p.status === 'warning' || p.status === 'offline' || (p.toner !== null && p.toner < 20)).length;
+        const bP = document.getElementById('badgePrinters');
+        const bA = document.getElementById('badgeAlerts');
+        if (bP) { bP.textContent = total; bP.className = total > 0 ? 'badge' : 'badge zero'; }
+        if (bA) { bA.textContent = alerts; bA.className = alerts > 0 ? 'badge' : 'badge zero'; }
+    }
+
+    // ========== DASHBOARD GERAL ==========
+    function renderDashboard() {
+        const total = printers.length;
+        const online = printers.filter(p => p.status === 'online').length;
+        const pagesToday = printers.reduce((s, p) => s + (p.pagesToday || 0), 0);
+        const alerts = printers.filter(p => p.status !== 'online').length;
+        return `
+        <div class="stats-grid">
+          <div class="stat-card" onclick="goTo('printers')"><div class="stat-icon blue"><i class="fas fa-print"></i></div><div class="stat-info"><div class="val">${total}</div><div class="lbl">Total Impressoras</div></div></div>
+          <div class="stat-card" onclick="goTo('printers')"><div class="stat-icon green"><i class="fas fa-check-circle"></i></div><div class="stat-info"><div class="val">${online}</div><div class="lbl">Online</div></div></div>
+          <div class="stat-card"><div class="stat-icon yellow"><i class="fas fa-copy"></i></div><div class="stat-info"><div class="val">${pagesToday.toLocaleString()}</div><div class="lbl">Páginas Hoje</div></div></div>
+          <div class="stat-card" onclick="goTo('clients')"><div class="stat-icon purple"><i class="fas fa-building"></i></div><div class="stat-info"><div class="val">${clients.length}</div><div class="lbl">Clientes</div></div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;">
+          <div class="panel">
+            <div class="panel-header"><h3>🖨️ Impressoras Recentes</h3><button class="btn btn-sm btn-outline" onclick="goTo('printers')">Ver todas</button></div>
+            <div class="table-wrap">${renderSimpleTable(printers.slice(0,6))}</div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><h3>👥 Clientes</h3><button class="btn btn-sm btn-outline" onclick="goTo('clients')">Gerenciar</button></div>
+            <div style="padding:10px;display:flex;flex-direction:column;gap:6px;">
+              ${clients.length === 0 ? '<div style="padding:20px;text-align:center;color:var(--text-muted)">Nenhum cliente.<br><button class="btn btn-primary" style="margin-top:10px" onclick="openClientModal()">Adicionar</button></div>' :
+                clients.slice(0,6).map(c => {
+                  const cp = printers.filter(p => p.clientId === c.id);
+                  return `<div style="background:var(--bg-surface);padding:9px 11px;border-radius:8px;cursor:pointer;border:1px solid var(--border)" onclick="goTo('client-detail',${c.id})">
+                    <strong style="font-size:0.83rem">${c.name}</strong><br>
+                    <small style="color:var(--text-muted)">${cp.length} impressora(s) · ${cp.filter(p=>p.status==='online').length} online</small>
+                  </div>`;
+                }).join('')}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function renderSimpleTable(list) {
+        if (list.length === 0) return `<div style="padding:24px;text-align:center;color:var(--text-muted)">Nenhuma impressora encontrada.</div>`;
+        return `<table><thead><tr><th>Impressora</th><th>Cliente</th><th>Status</th><th>Pág Hoje</th><th>IP</th></tr></thead><tbody>
+        ${list.map(p => `<tr onclick="openPrinterModal(${p.id})" style="cursor:pointer"><td><strong>${p.model}</strong><br><small style="color:var(--text-muted)">${p.serial}</small></td><td>${p.clientName}</td><td>${statusTag(p.status)}</td><td>${p.pagesToday}</td><td><code>${p.ip}</code></td></tr>`).join('')}
+        </tbody></table>`;
+    }
+
+    // ========== CLIENTES ==========
+    function renderClientsPage() {
+        const search = document.getElementById('globalSearch')?.value?.toLowerCase() || '';
+        let filtered = clients;
+        if (search) filtered = clients.filter(c => c.name.toLowerCase().includes(search) || (c.doc||'').includes(search));
+        return `
+        <div class="panel">
+          <div class="panel-header"><h3>Clientes Cadastrados (${filtered.length})</h3><button class="btn btn-primary" onclick="openClientModal()"><i class="fas fa-plus"></i> Novo Cliente</button></div>
+          <div class="table-wrap">
+            <table><thead><tr><th>Cliente</th><th>Documento</th><th>Impressoras</th><th>Pág Hoje</th><th>Plano</th><th>Ações</th></tr></thead><tbody>
+            ${filtered.map(c => {
+              const cp = printers.filter(p => p.clientId === c.id);
+              const pt = cp.reduce((s,p) => s + (p.pagesToday||0), 0);
+              return `<tr>
+                <td style="cursor:pointer" onclick="goTo('client-detail',${c.id})"><strong>${c.name}</strong><br><small style="color:var(--text-muted)">${c.email||'—'}</small></td>
+                <td>${c.doc||'—'}</td><td><strong>${cp.length}</strong></td><td>${pt.toLocaleString()}</td>
+                <td>${planTag(c.plan)}</td>
+                <td>
+                  <button class="btn btn-sm btn-primary" onclick="goTo('client-detail',${c.id})"><i class="fas fa-chart-pie"></i> Dashboard</button>
+                  <button class="btn-icon" onclick="openClientModal(${c.id})" title="Editar"><i class="fas fa-edit"></i></button>
+                  <button class="btn-icon danger" onclick="deleteClient(${c.id})" title="Excluir"><i class="fas fa-trash"></i></button>
+                </td>
+              </tr>`;
+            }).join('')}
+            ${filtered.length===0?`<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--text-muted)">Nenhum cliente cadastrado. <a href="#" onclick="openClientModal()" style="color:var(--accent)">Adicionar agora</a></td></tr>`:''}
+            </tbody></table>
+          </div>
+        </div>`;
+    }
+
+    // ========== DETALHE DO CLIENTE ==========
+    function renderClientDetail(clientId) {
+        const client = clients.find(c => c.id === clientId);
+        if (!client) return `<div class="panel" style="flex-shrink:0;"><div class="panel-header"><h3>Cliente não encontrado</h3></div></div>`;
+        const cp       = printers.filter(p => p.clientId === clientId);
+        const total    = cp.length;
+        const online   = cp.filter(p => p.status === 'online').length;
+        const pagesToday = cp.reduce((s,p) => s + (p.pagesToday||0), 0);
+        const lowToner = cp.filter(p => p.toner !== null && p.toner < 20).length;
+        const offline  = cp.filter(p => p.status === 'offline').length;
+        document.getElementById('pageTitle').textContent = `📋 ${client.name}`;
+        const agentSt = agentStatuses[clientId];
+        const isScan = scanningClientId === clientId;
+
+        return `
+        <!-- Header -->
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;flex-shrink:0;">
+          <div>
+            <h2 style="font-size:1.3rem;margin-bottom:4px">${client.name}</h2>
+            <p style="color:var(--text-muted);font-size:0.82rem">${[client.doc,client.email,client.phone,client.address].filter(Boolean).join(' · ')}</p>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-outline" onclick="openBilhetagemModal(${client.id})"><i class="fas fa-file-invoice"></i> Bilhetagem</button>
+            <button class="btn btn-outline" onclick="openClientModal(${client.id})"><i class="fas fa-edit"></i> Editar</button>
+            <button class="btn btn-primary" onclick="downloadClientAgent(${client.id})"><i class="fas fa-download"></i> Baixar Agente</button>
+            <button class="btn btn-danger" onclick="uninstallAgent(${client.id})" title="Envia comando de desinstalação para o agente ativo"><i class="fas fa-trash-alt"></i> Desinstalar Agente</button>
+          </div>
+        </div>
+
+        <!-- Status do Agente -->
+        <div class="agent-card" id="agentStatusCard">
+          <div class="agent-pulse ${agentSt?.isOnline ? 'online' : 'offline'}"></div>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:0.85rem">Agente ${agentSt?.isOnline ? '● Online' : '○ Offline / Não detectado'}</div>
+            <div style="font-size:0.76rem;color:var(--text-muted)">
+              ${agentSt?.lastSeen ? `Último contato: ${agentSt.lastSeen} (${agentSt.secondsAgo}s atrás)` : 'Nenhum contato registrado. Baixe e instale o agente neste cliente.'}
+            </div>
+          </div>
+          <button class="btn btn-sm btn-outline" onclick="downloadClientAgent(${client.id})"><i class="fas fa-download"></i> Baixar</button>
+        </div>
+
+        <!-- Scan de IP Manual -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3>📡 Scan de Rede</h3>
+            <span style="font-size:0.76rem;color:var(--text-muted)">Forçar busca de impressoras por IP</span>
+          </div>
+          <div style="padding:16px 18px;display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+            <div style="flex:1;min-width:240px">
+              <label style="display:block;font-size:0.72rem;font-weight:600;color:var(--text-secondary);margin-bottom:6px">IP ou Faixa de Rede Manual</label>
+              <input id="manualIp_${client.id}" type="text" placeholder="Ex: 192.168.1.100 ou 192.168.1 (faixa .1–.254)"
+                style="width:100%;padding:9px 14px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-primary);font-size:0.83rem;outline:none;transition:border-color 0.2s"
+                onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+            </div>
+            <div style="display:flex;gap:8px;padding-bottom:1px">
+              <button id="clientScanBtn_${client.id}" class="btn btn-success" onclick="triggerScan(${client.id})" ${isScan?'disabled':''}>
+                ${isScan?`<i class="fas fa-circle-notch spin"></i> Aguardando agente...`:`<i class="fas fa-radar"></i> Scan Automático`}
+              </button>
+              <button class="btn btn-outline" onclick="triggerManualScan(${client.id})">
+                <i class="fas fa-crosshairs"></i> Scan no IP Manual
+              </button>
+            </div>
+          </div>
+          <div style="padding:0 18px 14px;font-size:0.74rem;color:var(--text-muted)">
+            💡 <strong>Scan Automático</strong>: o agente descobre a rede local.&nbsp;&nbsp;|&nbsp;&nbsp;
+            <strong>Scan no IP Manual</strong>: força a busca no IP ou faixa digitada acima.
+          </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-grid">
+          <div class="stat-card"><div class="stat-icon blue"><i class="fas fa-print"></i></div><div class="stat-info"><div class="val">${total}</div><div class="lbl">Impressoras</div></div></div>
+          <div class="stat-card"><div class="stat-icon green"><i class="fas fa-check-circle"></i></div><div class="stat-info"><div class="val">${online}</div><div class="lbl">Online</div></div></div>
+          <div class="stat-card"><div class="stat-icon yellow"><i class="fas fa-tint"></i></div><div class="stat-info"><div class="val">${lowToner}</div><div class="lbl">Toner Baixo</div></div></div>
+          <div class="stat-card"><div class="stat-icon red"><i class="fas fa-times-circle"></i></div><div class="stat-info"><div class="val">${offline}</div><div class="lbl">Offline</div></div></div>
+        </div>
+
+        <!-- Gráfico -->
+        <div class="panel">
+          <div class="panel-header"><h3>📈 Histórico de Impressão — Últimos 14 dias</h3></div>
+          <div class="chart-box" style="height:200px;padding:16px 18px"><canvas id="clientChart"></canvas></div>
+        </div>
+
+        <!-- Impressoras do cliente -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3>🖨️ Impressoras do Cliente</h3>
+            <span style="font-size:0.76rem;color:var(--text-muted)">${total} encontrada(s) pelo agente</span>
+          </div>
+          <div class="table-wrap">
+            <table><thead><tr>
+              <th>Impressora</th><th>IP</th><th>Status</th><th>Toner</th><th>Pág Hoje</th><th>Pág Total</th><th>Último Contato</th><th>Monitorar</th><th>Ações</th>
+            </tr></thead><tbody>
+            ${cp.length === 0
+              ? `<tr><td colspan="9" style="text-align:center;padding:30px;color:var(--text-muted)">
+                  Nenhuma impressora encontrada.<br>
+                  <button class="btn btn-success" style="margin-top:10px" onclick="triggerScan(${client.id})"><i class="fas fa-radar"></i> Escanear Rede Agora</button>
+                </td></tr>`
+              : cp.map(p => `
+              <tr>
+                <td style="cursor:pointer" onclick="openPrinterModal(${p.id})">
+                  <strong>${p.model}</strong><br><small style="color:var(--text-muted)">${p.serial}</small>
+                </td>
+                <td>
+                  <code id="ip-display-${p.id}">${p.ip}</code>
+                  <button class="btn-icon" onclick="openEditIp(${p.id},'${p.ip}')" title="Alterar IP"><i class="fas fa-pen"></i></button>
+                </td>
+                <td>${statusTag(p.status)}</td>
+                <td>${tonerBar(p.toner)}</td>
+                <td>${p.pagesToday}</td>
+                <td>${(p.pagesTotal||0).toLocaleString()}</td>
+                <td style="font-size:0.76rem;color:var(--text-muted)">${p.lastAccess}</td>
+                <td>
+                  <label class="toggle" title="${p.isMonitored?'Desativar monitoramento':'Ativar monitoramento'}">
+                    <input type="checkbox" ${p.isMonitored?'checked':''} onchange="toggleMonitor(${p.id},this)">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </td>
+                <td>
+                  <button class="btn-icon" onclick="openPrinterModal(${p.id})" title="Detalhes"><i class="fas fa-info-circle"></i></button>
+                  <button class="btn-icon danger" onclick="deletePrinter(${p.id})" title="Remover"><i class="fas fa-trash"></i></button>
+                </td>
+              </tr>`).join('')}
+            </tbody></table>
+          </div>
+        </div>`;
+    }
+
+    // Atualiza as métricas sem piscar: preserva gráfico mesmo após re-render
+    function updateClientDetailMetrics(clientId) {
+        if (currentPage !== 'client-detail') return;
+        const area = document.getElementById('contentArea');
+        if (!area) return;
+        // O innerHTML destrói o canvas — destruir o chart antes para evitar memory leak
+        if (_clientChart) { _clientChart.destroy(); _clientChart = null; }
+        area.innerHTML = renderClientDetail(clientId);
+        // Recriar o gráfico no novo canvas
+        renderClientChart(clientId);
+    }
+
+    function updateAgentStatusCard(clientId) {
+        const card = document.getElementById('agentStatusCard');
+        if (!card) return;
+        const agentSt = agentStatuses[clientId];
+        card.innerHTML = `
+          <div class="agent-pulse ${agentSt?.isOnline ? 'online' : 'offline'}"></div>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:0.85rem">Agente ${agentSt?.isOnline ? '● Online' : '○ Offline / Não detectado'}</div>
+            <div style="font-size:0.76rem;color:var(--text-muted)">
+              ${agentSt?.lastSeen ? `Último contato: ${agentSt.lastSeen} (${agentSt.secondsAgo}s atrás)` : 'Nenhum contato registrado.'}
+            </div>
+          </div>
+          <button class="btn btn-sm btn-outline" onclick="downloadClientAgent(${clientId})"><i class="fas fa-download"></i> Baixar</button>`;
+    }
+
+    // ========== GRÁFICO (sem piscar) ==========
+    function renderClientChart(clientId) {
+        const cp = printers.filter(p => p.clientId === clientId);
+        const agg = new Array(14).fill(0);
+        cp.forEach(p => (p.history||[]).forEach((v,i) => { if (i < 14) agg[i] += v; }));
+
+        const labels = Array.from({length:14}, (_,i) => {
+            const d = new Date(); d.setDate(d.getDate() - (13 - i));
+            return d.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'});
+        });
+
+        setTimeout(() => {
+            const ctx = document.getElementById('clientChart');
+            if (!ctx) return;
+            if (_clientChart) {
+                _clientChart.data.labels = labels;
+                _clientChart.data.datasets[0].data = agg;
+                _clientChart.update('none');
+                return;
+            }
+            _clientChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{ label: 'Páginas', data: agg,
+                        backgroundColor: 'rgba(99,102,241,0.5)', borderColor: '#818cf8',
+                        borderWidth: 2, borderRadius: 6 }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    animation: { duration: 400 },
+                    plugins: { legend: { labels: { color: '#a0b4c8' } } },
+                    scales: {
+                        x: { ticks: { color: '#6b8098' }, grid: { color: '#263240' } },
+                        y: { ticks: { color: '#6b8098' }, grid: { color: '#263240' }, beginAtZero: true }
+                    }
+                }
+            });
+        }, 200);
+    }
+
+    function updateClientChartData(clientId) {
+        if (!_clientChart) { renderClientChart(clientId); return; }
+        const cp  = printers.filter(p => p.clientId === clientId);
+        const agg = new Array(14).fill(0);
+        cp.forEach(p => (p.history||[]).forEach((v,i) => { if (i < 14) agg[i] += v; }));
+        _clientChart.data.datasets[0].data = agg;
+        _clientChart.update('none');
+    }
+
+    // ========== BILHETAGEM E REGRAS ==========
+    window.switchBilhetagemTab = function(tab, btn = null) {
+        document.querySelectorAll('#bilhetagemTabs .filter-pill').forEach(p => p.classList.remove('active'));
+        if (btn) {
+            btn.classList.add('active');
+        } else if (event && event.target && event.target.classList.contains('filter-pill')) {
+            event.target.classList.add('active');
+        } else {
+            // Find pill by tab
+            const pills = document.querySelectorAll('#bilhetagemTabs .filter-pill');
+            if (tab === 'history') pills[0].classList.add('active');
+            if (tab === 'quotas') pills[1].classList.add('active');
+            if (tab === 'reports') pills[2].classList.add('active');
+        }
+        const c = document.getElementById('bilhetagemContent');
+        if (tab === 'history') c.innerHTML = renderBilhetagemHistory();
+        if (tab === 'quotas') c.innerHTML = renderBilhetagemQuotas();
+        if (tab === 'reports') c.innerHTML = renderBilhetagemReports();
+    };
+
+    function renderBilhetagemHistory() {
+        return `
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Usuário</th><th>IP Origem</th><th>Documento</th><th>Impressora</th><th>Páginas</th><th>Data</th></tr></thead>
+                <tbody>
+                ${printJobs.map(j => `<tr>
+                    <td><strong>${j.userName || 'Desconhecido'}</strong></td>
+                    <td><code>${j.userIp || '-'}</code></td>
+                    <td>${j.documentName || 'N/A'}</td>
+                    <td>${j.printerModel || 'Desconhecida'}</td>
+                    <td>${j.totalPages}</td>
+                    <td>${j.printedAt || '-'}</td>
+                </tr>`).join('')}
+                ${printJobs.length===0?`<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted)">Nenhum histórico encontrado.</td></tr>`:''}
+                </tbody>
+            </table>
+        </div>`;
+    }
+
+    function renderBilhetagemReports() {
+        if (!printJobs || printJobs.length === 0) {
+            return '<div style="padding:40px;text-align:center;color:var(--text-muted)">Sem dados suficientes para gerar relatórios.</div>';
+        }
+
+        const userStats = {};
+        printJobs.forEach(j => {
+            const u = j.userName || 'Desconhecido';
+            if (!userStats[u]) {
+                userStats[u] = { name: u, ip: j.userIp || '-', totalJobs: 0, totalPages: 0 };
+            }
+            userStats[u].totalJobs++;
+            userStats[u].totalPages += j.totalPages;
+            if (userStats[u].ip === '-' && j.userIp) {
+                userStats[u].ip = j.userIp;
+            }
+        });
+
+        const sortedUsers = Object.values(userStats).sort((a,b) => b.totalPages - a.totalPages);
+        const topUser = sortedUsers[0] || {};
+        const totalPagesAll = sortedUsers.reduce((s, u) => s + u.totalPages, 0);
+        const totalJobsAll = sortedUsers.reduce((s, u) => s + u.totalJobs, 0);
+
+        return `
+        <div class="stats-grid" style="grid-template-columns: 1fr 1fr 1fr; margin-bottom: 20px;">
+            <div class="stat-card">
+                <div class="stat-icon purple"><i class="fas fa-trophy"></i></div>
+                <div class="stat-info"><div class="val" style="font-size:1.2rem">${topUser.name || '-'}</div><div class="lbl">Top Usuário</div></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon blue"><i class="fas fa-copy"></i></div>
+                <div class="stat-info"><div class="val">${totalPagesAll}</div><div class="lbl">Total de Páginas</div></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon green"><i class="fas fa-chart-line"></i></div>
+                <div class="stat-info"><div class="val">${(totalPagesAll / (totalJobsAll || 1)).toFixed(1)}</div><div class="lbl">Média Pág/Trabalho</div></div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">
+                <h3>🏆 Ranking de Usuários e Frequência</h3>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Usuário</th>
+                            <th>IP (Estação)</th>
+                            <th>Trabalhos</th>
+                            <th>Páginas Totais</th>
+                            <th>Média (Pág/Trab)</th>
+                            <th>Ações Rápidas</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${sortedUsers.map(u => `
+                        <tr>
+                            <td><strong>${u.name}</strong></td>
+                            <td><code>${u.ip}</code></td>
+                            <td>${u.totalJobs}</td>
+                            <td><strong>${u.totalPages}</strong></td>
+                            <td>${(u.totalPages / u.totalJobs).toFixed(1)}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline" onclick="limitUser('${u.name}')" title="Definir Limite de Cotas"><i class="fas fa-ban"></i> Limitar</button>
+                            </td>
+                        </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        `;
+    }
+
+    window.limitUser = function(userName) {
+        switchBilhetagemTab('quotas');
+        setTimeout(() => {
+            const el = document.getElementById('qUserName');
+            if(el) {
+                el.value = userName;
+                el.focus();
+            }
+        }, 50);
+    };
+
+    function renderBilhetagemQuotas() {
+        return `
+        <div style="display:flex;gap:15px;align-items:flex-end;margin-bottom:20px;background:var(--bg-card);padding:15px;border-radius:8px;">
+            <div class="form-group" style="flex:1"><label>ID Cliente</label><input type="number" id="qClientId" value="${currentClientId || 1}" style="width:100%"></div>
+            <div class="form-group" style="flex:2"><label>Usuário Windows</label><input type="text" id="qUserName" placeholder="Ex: admin, joao.silva" style="width:100%"></div>
+            <div class="form-group" style="flex:1"><label>Limite de Páginas (0 = livre)</label><input type="number" id="qMaxPages" value="0" style="width:100%"></div>
+            <div class="form-group" style="flex:1">
+                <label style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+                    <input type="checkbox" id="qIsBlocked"> Bloquear Totalmente
+                </label>
+            </div>
+            <button class="btn btn-primary" onclick="saveQuota()"><i class="fas fa-save"></i> Salvar Regra</button>
+        </div>
+        <div class="table-wrap">
+            <table id="quotasTable">
+                <thead><tr><th>Cliente ID</th><th>Usuário</th><th>Usadas / Limite</th><th>Status</th><th>Ações</th></tr></thead>
+                <tbody><tr><td colspan="5" style="text-align:center;padding:20px"><button class="btn btn-outline" onclick="loadQuotasList(${currentClientId || 1})">Carregar Lista</button></td></tr></tbody>
+            </table>
+        </div>
+        `;
+    }
+
+    window.saveQuota = async function() {
+        const clientId = parseInt(document.getElementById('qClientId').value);
+        const userName = document.getElementById('qUserName').value.trim();
+        const maxPages = parseInt(document.getElementById('qMaxPages').value) || 0;
+        const isBlocked = document.getElementById('qIsBlocked').checked;
+
+        if (!userName) return toast('Informe o usuário!', 'error');
+
+        try {
+            await fetch(`${API_BASE}/quotas`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ clientId, userName, maxPages, isBlocked })
+            });
+            toast('Regra salva!', 'success');
+            loadQuotasList(clientId);
+        } catch { toast('Erro ao salvar', 'error'); }
+    };
+
+    window.loadQuotasList = async function(clientId = 1) {
+        try {
+            const res = await fetch(`${API_BASE}/quotas/${clientId}`);
+            const list = await res.json();
+            const tb = document.querySelector('#quotasTable tbody');
+            if(!tb) return;
+            tb.innerHTML = list.map(q => `<tr>
+                <td>${q.clientId}</td>
+                <td><strong>${q.userName}</strong></td>
+                <td>${q.pagesUsed} / ${q.maxPages === 0 ? 'Ilimitado' : q.maxPages}</td>
+                <td>${q.isBlocked ? '<span class="tag tag-red">Bloqueado</span>' : '<span class="tag tag-green">Permitido</span>'}</td>
+                <td>
+                    <button class="btn-icon danger" onclick="deleteQuota(${q.id}, ${clientId})"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>`).join('');
+            if (list.length === 0) tb.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted)">Nenhuma regra configurada.</td></tr>`;
+        } catch { toast('Erro ao carregar', 'error'); }
+    };
+
+    window.deleteQuota = async function(id, clientId) {
+        if (!confirm('Remover regra?')) return;
+        try {
+            await fetch(`${API_BASE}/quotas/${id}`, { method: 'DELETE' });
+            toast('Regra removida.', 'success');
+            loadQuotasList(clientId);
+        } catch { toast('Erro ao remover', 'error'); }
+    };
+
+    window.toggleMonitor = async function(id, checkbox) {
+        try {
+            await fetch(`${API_BASE}/printers/${id}/monitor`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ isMonitored: checkbox.checked })
+            });
+            toast(checkbox.checked ? 'Monitoramento ativado.' : 'Monitoramento desativado.', 'success');
+        } catch {
+            checkbox.checked = !checkbox.checked; // revert
+            toast('Erro ao alterar.', 'error');
+        }
+    };
+
+    // ========== IMPRESSORAS / PARQUE ==========
+    function renderFilterablePage(title) {
+        return `
+        <div class="panel">
+          <div class="panel-header"><h3>${title}</h3>
+            <div class="filter-pills" id="filterPills">
+              <button class="filter-pill active" data-filter="all">Todas</button>
+              <button class="filter-pill" data-filter="online">Online</button>
+              <button class="filter-pill" data-filter="warning">Atenção</button>
+              <button class="filter-pill" data-filter="offline">Offline</button>
+            </div>
+          </div>
+          <div class="table-wrap" id="printersTableWrap">${renderPrinterTable('all')}</div>
+        </div>`;
+    }
+
+    function renderPrinterTable(filter) {
+        const search = document.getElementById('globalSearch')?.value?.toLowerCase() || '';
+        let list = printers;
+        if (filter && filter !== 'all') list = list.filter(p => p.status === filter);
+        if (search) list = list.filter(p =>
+            p.model.toLowerCase().includes(search) ||
+            p.clientName.toLowerCase().includes(search) ||
+            p.ip.includes(search) ||
+            p.serial.toLowerCase().includes(search)
+        );
+        return `<table><thead><tr><th>Impressora</th><th>Cliente</th><th>Status</th><th>IP</th><th>Toner</th><th>Pág Hoje</th><th>Pág Total</th><th>Monitorar</th><th>Ações</th></tr></thead><tbody>
+        ${list.map(p => `<tr>
+          <td style="cursor:pointer" onclick="openPrinterModal(${p.id})"><strong>${p.model}</strong><br><small style="color:var(--text-muted)">${p.serial}</small></td>
+          <td style="cursor:pointer" onclick="goTo('client-detail',${p.clientId})">${p.clientName}</td>
+          <td>${statusTag(p.status)}</td>
+          <td><code>${p.ip}</code><button class="btn-icon" onclick="openEditIp(${p.id},'${p.ip}')"><i class="fas fa-pen"></i></button></td>
+          <td>${tonerBar(p.toner)}</td>
+          <td>${p.pagesToday}</td>
+          <td>${(p.pagesTotal||0).toLocaleString()}</td>
+          <td><label class="toggle"><input type="checkbox" ${p.isMonitored?'checked':''} onchange="toggleMonitor(${p.id},this)"><span class="toggle-slider"></span></label></td>
+          <td>
+            <button class="btn-icon" onclick="openPrinterModal(${p.id})"><i class="fas fa-info-circle"></i></button>
+            <button class="btn-icon danger" onclick="deletePrinter(${p.id})"><i class="fas fa-trash"></i></button>
+          </td>
+        </tr>`).join('')}
+        ${list.length===0?`<tr><td colspan="9" style="text-align:center;padding:28px;color:var(--text-muted)">Nenhuma impressora encontrada.</td></tr>`:''}
+        </tbody></table>`;
+    }
+
+    function bindFilterEvents() {
+        const container = document.getElementById('filterPills');
+        if (!container) return;
+        container.querySelectorAll('.filter-pill').forEach(pill => {
+            pill.addEventListener('click', function() {
+                container.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+                this.classList.add('active');
+                currentFilter = this.dataset.filter;
+                const tw = document.getElementById('printersTableWrap');
+                if (tw) tw.innerHTML = renderPrinterTable(currentFilter);
+            });
+        });
+    }
+
+    // ========== ALERTAS ==========
+    function renderAlertsPage() {
+        const warning = printers.filter(p => p.status === 'warning' || p.status === 'offline' || (p.toner !== null && p.toner < 20));
+        return `<div class="panel">
+          <div class="panel-header"><h3>🔔 Alertas Ativos (${warning.length})</h3></div>
+          <div class="table-wrap"><table><thead><tr><th>Impressora</th><th>Cliente</th><th>Tipo</th><th>Detalhe</th><th>Ação</th></tr></thead><tbody>
+          ${warning.map(p => {
+            const types = [];
+            if (p.status === 'offline') types.push(`<span class="tag tag-red">Offline</span>`);
+            if (p.status === 'warning') types.push(`<span class="tag tag-yellow">Atenção</span>`);
+            if (p.toner !== null && p.toner < 20) types.push(`<span class="tag tag-yellow">Toner ${p.toner}%</span>`);
+            return `<tr onclick="goTo('client-detail',${p.clientId})" style="cursor:pointer">
+              <td><strong>${p.model}</strong><br><small><code>${p.ip}</code></small></td>
+              <td>${p.clientName}</td>
+              <td>${types.join(' ')}</td>
+              <td style="font-size:0.76rem">Último: ${p.lastAccess}</td>
+              <td><button class="btn btn-sm btn-outline" onclick="goTo('client-detail',${p.clientId});event.stopPropagation()">Ver cliente</button></td>
+            </tr>`;
+          }).join('')}
+          ${warning.length===0?`<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text-muted)">✅ Nenhum alerta no momento!</td></tr>`:''}
+          </tbody></table></div>
+        </div>`;
+    }
+
+    // ========== RELATÓRIOS ==========
+    function renderReportsPage() {
+        return `<div class="panel">
+          <div class="panel-header"><h3>📋 Relatório de Impressões</h3><span style="font-size:0.76rem;color:var(--text-muted)">${printJobs.length} registros</span></div>
+          <div class="table-wrap"><table><thead><tr><th>Data/Hora</th><th>Cliente</th><th>Impressora</th><th>IP</th><th>Documento</th><th>Usuário</th><th>Páginas</th></tr></thead><tbody>
+          ${printJobs.length === 0
+            ? `<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-muted)">Nenhum trabalho registrado ainda. O agente precisa estar instalado e ativo para capturar impressões.</td></tr>`
+            : printJobs.map(j => `<tr>
+                <td style="font-size:0.75rem">${j.printedAt}</td>
+                <td>${j.clientName}</td>
+                <td>${j.printerModel}</td>
+                <td><code>${j.printerIp}</code></td>
+                <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${j.documentName||'—'}</td>
+                <td>${j.userName||'—'}</td>
+                <td><strong>${j.totalPages}</strong></td>
+              </tr>`).join('')}
+          </tbody></table></div>
+        </div>`;
+    }
+
+    // ========== CONFIGURAÇÕES ==========
+    function renderSettingsPage() {
+        return `
+        <div class="panel">
+          <div class="panel-header"><h3>⚙️ Configurações do Sistema</h3></div>
+          <div style="padding:20px;display:flex;flex-direction:column;gap:16px;">
+            <div class="detail-grid">
+              <div class="detail-item"><div class="lbl">Servidor Backend</div><div class="val"><code>${API_BASE}</code></div></div>
+              <div class="detail-item"><div class="lbl">Porta da API</div><div class="val">5000</div></div>
+              <div class="detail-item"><div class="lbl">Painel Web</div><div class="val"><code>${window.location.host}</code></div></div>
+              <div class="detail-item"><div class="lbl">Polling automático</div><div class="val">A cada 10 segundos</div></div>
+            </div>
+            <div style="background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;">
+              <div style="font-weight:600;margin-bottom:8px;font-size:0.85rem">📋 Instruções de Deploy do Agente</div>
+              <ol style="color:var(--text-secondary);font-size:0.82rem;line-height:2;padding-left:18px;">
+                <li>Vá até a aba do cliente desejado</li>
+                <li>Clique em <strong>Baixar Agente</strong></li>
+                <li>Envie o arquivo <code>Agent_Setup.exe</code> para o computador do cliente</li>
+                <li>O cliente executa o arquivo uma única vez — sem precisar instalar nada</li>
+                <li>O agente se instala silenciosamente, aparece no systray (bandeja do sistema) e começa a monitorar</li>
+                <li>Para desinstalar: pasta <code>C:\\ProgramData\\PrintCenterAgent\\Desinstalar.bat</code></li>
+              </ol>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    // ========== DESINSTALAR AGENTE REMOTAMENTE ==========
+    async function uninstallAgent(clientId) {
+        const agentSt = agentStatuses[clientId];
+        if (!agentSt?.isOnline) {
+            toast('⚠️ Agente está offline. O comando só funciona com o agente conectado.', 'error');
+            return;
+        }
+        if (!confirm('Deseja desinstalar o agente deste cliente?\n\nO monitoramento será interrompido e o programa será removido do computador do cliente.')) return;
+        try {
+            const res = await fetch(`${API_BASE}/admin/uninstall-agent/${clientId}`, { method: 'POST' });
+            const data = await res.json();
+            toast('🗑️ ' + data.message, 'success');
+        } catch {
+            toast('Erro ao enviar comando de desinstalação.', 'error');
+        }
+    }
+
+    // ========== SCAN MANUAL POR IP ==========
+    async function triggerManualScan(clientId) {
+        const input = document.getElementById(`manualIp_${clientId}`);
+        const customIp = input?.value?.trim();
+        if (!customIp) {
+            toast('⚠️ Digite um IP ou faixa de rede antes de clicar em Scan Manual.', 'error');
+            input?.focus();
+            return;
+        }
+        // Validação básica
+        const ipPattern = /^(\d{1,3}\.){2,3}\d{0,3}$/;
+        if (!ipPattern.test(customIp)) {
+            toast('⚠️ Formato inválido. Use: 192.168.1.100 (IP único) ou 192.168.1 (faixa).', 'error');
+            return;
+        }
+        scanningClientId = clientId;
+        try {
+            const res = await fetch(`${API_BASE}/admin/force-scan/${clientId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ customIp })
+            });
+            const data = await res.json();
+            toast(`📡 ${data.message}`, 'success');
+        } catch {
+            toast('Erro ao enviar scan manual.', 'error');
+        }
+        setTimeout(() => { scanningClientId = null; }, 30000);
+    }
+
+    // ========== SCAN ==========
+    async function triggerScan(clientId) {
+        scanningClientId = clientId;
+        const btn = document.getElementById(`clientScanBtn_${clientId}`);
+        if (btn) { btn.disabled = true; btn.innerHTML = `<i class="fas fa-circle-notch spin"></i> Aguardando agente...`; }
+        try {
+            await fetch(`${API_BASE}/admin/force-scan/${clientId}`, { method: 'POST' });
+            toast('📡 Ordem de varredura enviada! Aguarde o agente processar...', 'success');
+        } catch {
+            toast('Erro ao enviar ordem de scan.', 'error');
+        }
+        // Libera botão após 30s
+        setTimeout(() => {
+            scanningClientId = null;
+            const b = document.getElementById(`clientScanBtn_${clientId}`);
+            if (b) { b.disabled = false; b.innerHTML = `<i class="fas fa-radar"></i> Scan Automático`; }
+        }, 30000);
+    }
+
+    // ========== MONITOR TOGGLE ==========
+    async function toggleMonitor(printerId, checkbox) {
+        try {
+            const res = await fetch(`${API_BASE}/printers/${printerId}/monitor`, { method: 'PUT' });
+            const data = await res.json();
+            toast(data.message, 'success');
+            // Atualiza localmente para não re-render completo
+            const p = printers.find(x => x.id === printerId);
+            if (p) p.isMonitored = data.isMonitored;
+        } catch {
+            checkbox.checked = !checkbox.checked; // Reverte
+            toast('Erro ao alterar monitoramento.', 'error');
+        }
+    }
+
+    // ========== EDITAR IP ==========
+    function openEditIp(printerId, currentIp) {
+        document.getElementById('editIpPrinterId').value = printerId;
+        document.getElementById('editIpValue').value = currentIp;
+        document.getElementById('modalEditIp').classList.add('active');
+    }
+
+    function validateIp(input) {
+        const valid = /^(\d{0,3}\.){0,3}\d{0,3}$/.test(input.value);
+        input.style.borderColor = valid ? 'var(--accent)' : 'var(--red)';
+    }
+
+    async function saveIp() {
+        const printerId = parseInt(document.getElementById('editIpPrinterId').value);
+        const newIp = document.getElementById('editIpValue').value.trim();
+        if (!newIp) { toast('IP inválido.', 'error'); return; }
+        try {
+            const res = await fetch(`${API_BASE}/printers/${printerId}/ip`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ip: newIp })
+            });
+            const data = await res.json();
+            closeModal('modalEditIp');
+            toast('✅ ' + data.message, 'success');
+            // Atualiza localmente
+            const p = printers.find(x => x.id === printerId);
+            if (p) p.ip = newIp;
+            // Atualiza display inline sem re-render
+            const disp = document.getElementById(`ip-display-${printerId}`);
+            if (disp) disp.textContent = newIp;
+        } catch {
+            toast('Erro ao salvar IP.', 'error');
+        }
+    }
+
+    // ========== EXCLUIR IMPRESSORA ==========
+    async function deletePrinter(id) {
+        if (!confirm('Remover esta impressora do monitoramento?')) return;
+        try {
+            await fetch(`${API_BASE}/printers/${id}`, { method: 'DELETE' });
+            printers = printers.filter(p => p.id !== id);
+            toast('Impressora removida.', 'success');
+            render();
+        } catch {
+            toast('Erro ao remover impressora.', 'error');
+        }
+    }
+
+    // ========== MODAIS: IMPRESSORA ==========
+    function openPrinterModal(id) {
+        const p = printers.find(pr => pr.id === id);
+        if (!p) return;
+        document.getElementById('modalPrinterTitle').textContent = `🖨️ ${p.model}`;
+        const labels = Array.from({length:14}, (_,i) => {
+            const d = new Date(); d.setDate(d.getDate()-(13-i));
+            return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+        });
+        document.getElementById('modalPrinterBody').innerHTML = `
+        <div class="detail-grid">
+          <div class="detail-item"><div class="lbl">Modelo</div><div class="val">${p.model}</div></div>
+          <div class="detail-item"><div class="lbl">Nº Série</div><div class="val">${p.serial||'N/A'}</div></div>
+          <div class="detail-item"><div class="lbl">Status</div><div class="val">${statusTag(p.status)}</div></div>
+          <div class="detail-item"><div class="lbl">IP</div><div class="val"><code>${p.ip}</code></div></div>
+          <div class="detail-item"><div class="lbl">Firmware</div><div class="val">${p.firmware||'N/A'}</div></div>
+          <div class="detail-item"><div class="lbl">Localização</div><div class="val">${p.location||'—'}</div></div>
+          <div class="detail-item"><div class="lbl">Contador Total</div><div class="val">${(p.pagesTotal||0).toLocaleString()} pág.</div></div>
+          <div class="detail-item"><div class="lbl">Páginas Hoje</div><div class="val">${p.pagesToday}</div></div>
+          <div class="detail-item"><div class="lbl">Toner</div><div class="val">${tonerBar(p.toner)}</div></div>
+          <div class="detail-item"><div class="lbl">Cilindro</div><div class="val">${p.drum !== null ? p.drum+'%' : '<span class="tag tag-yellow">N/A</span>'}</div></div>
+          <div class="detail-item"><div class="lbl">Cliente</div><div class="val">${p.clientName}</div></div>
+          <div class="detail-item"><div class="lbl">Último Contato</div><div class="val">${p.lastAccess}</div></div>
+        </div>
+        <div style="height:180px;margin-top:14px;background:var(--bg-surface);border-radius:var(--radius);padding:12px;">
+          <canvas id="historyChart"></canvas>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button class="btn btn-outline btn-sm" onclick="openEditIp(${p.id},'${p.ip}');closeModal('modalPrinter')"><i class="fas fa-pen"></i> Editar IP</button>
+          <button class="btn btn-danger btn-sm" onclick="deletePrinter(${p.id});closeModal('modalPrinter')"><i class="fas fa-trash"></i> Remover</button>
+        </div>`;
+        document.getElementById('modalPrinter').classList.add('active');
+        setTimeout(() => {
+            const ctx = document.getElementById('historyChart');
+            if (ctx) {
+                if (_historyChart) { _historyChart.destroy(); _historyChart = null; }
+                _historyChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: { labels, datasets: [{ label: 'Páginas', data: p.history||[], backgroundColor: 'rgba(59,139,235,0.5)', borderColor: '#3b8beb', borderWidth: 2, borderRadius: 6 }] },
+                    options: { responsive:true, maintainAspectRatio:false, animation:{duration:300},
+                        plugins:{legend:{labels:{color:'#a0b4c8'}}},
+                        scales:{ x:{ticks:{color:'#6b8098'},grid:{color:'#263240'}}, y:{ticks:{color:'#6b8098'},grid:{color:'#263240'},beginAtZero:true} }
+                    }
+                });
+            }
+        }, 200);
+    }
+
+    // ========== MODAIS: CLIENTE ==========
+    function openClientModal(id = null) {
+        document.getElementById('clientForm').reset();
+        document.getElementById('clientId').value = '';
+        if (id) {
+            const c = clients.find(cl => cl.id === id);
+            if (c) {
+                document.getElementById('modalClientTitle').textContent = '✏️ Editar Cliente';
+                document.getElementById('clientId').value   = c.id;
+                document.getElementById('clientName').value = c.name;
+                document.getElementById('clientDoc').value  = c.doc;
+                document.getElementById('clientEmail').value= c.email;
+                document.getElementById('clientPhone').value= c.phone;
+                document.getElementById('clientAddress').value = c.address;
+                document.getElementById('clientPlan').value = c.plan;
+            }
+        } else {
+            document.getElementById('modalClientTitle').textContent = '👤 Novo Cliente';
+        }
+        document.getElementById('modalClient').classList.add('active');
+    }
+
+    function closeModal(id) {
+        document.getElementById(id).classList.remove('active');
+    }
+
+    async function saveClient(event) {
+        event.preventDefault();
+        const id   = document.getElementById('clientId').value;
+        const data = {
+            name:    document.getElementById('clientName').value,
+            doc:     document.getElementById('clientDoc').value,
+            email:   document.getElementById('clientEmail').value,
+            phone:   document.getElementById('clientPhone').value,
+            address: document.getElementById('clientAddress').value,
+            plan:    document.getElementById('clientPlan').value,
+        };
+        const method = id ? 'PUT' : 'POST';
+        const url    = id ? `${API_BASE}/clients/${id}` : `${API_BASE}/clients`;
+        try {
+            await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+            closeModal('modalClient');
+            toast(id ? '✅ Cliente atualizado!' : '✅ Cliente criado!', 'success');
+            await fetchData();
+        } catch {
+            toast('Erro ao salvar cliente.', 'error');
+        }
+    }
+
+    async function deleteClient(id) {
+        if (!confirm('Excluir cliente e TODAS as impressoras e histórico permanentemente?')) return;
+        try {
+            await fetch(`${API_BASE}/clients/${id}`, { method: 'DELETE' });
+            if (currentPage === 'client-detail' && currentClientId === id) goTo('clients');
+            toast('Cliente excluído.', 'success');
+            await fetchData();
+        } catch {
+            toast('Erro ao excluir.', 'error');
+        }
+    }
+
+    // ========== DOWNLOAD AGENTE ==========
+    function downloadClientAgent(clientId) {
+        toast('⬇️ Gerando agente personalizado...');
+        window.location.href = `${API_BASE}/clients/${clientId}/download-agent`;
+    }
+
+    // ========== HELPERS ==========
+    function statusTag(s) {
+        const m = {
+            online:  `<span class="tag tag-green"><span class="dot online"></span>Online</span>`,
+            offline: `<span class="tag tag-red"><span class="dot offline"></span>Offline</span>`,
+            warning: `<span class="tag tag-yellow"><span class="dot warning"></span>Atenção</span>`
+        };
+        return m[s] || `<span class="tag">${s}</span>`;
+    }
+
+    function planTag(p) {
+        const m = { basic:'<span class="tag tag-yellow">Básico</span>', pro:'<span class="tag tag-green">Profissional</span>', enterprise:'<span class="tag tag-purple">Enterprise</span>' };
+        return m[p] || p;
+    }
+
+    function tonerBar(level) {
+        if (level === null || level === undefined) return `<span class="tag tag-yellow"><i class="fas fa-exclamation-circle"></i> N/A</span>`;
+        let color = 'var(--green)';
+        if (level < 20) color = 'var(--red)';
+        else if (level < 40) color = 'var(--yellow)';
+        return `<div style="display:flex;align-items:center;gap:5px"><div style="width:40px;height:5px;background:var(--bg-input);border-radius:6px;overflow:hidden"><div style="width:${level}%;height:100%;background:${color};border-radius:6px"></div></div><span style="font-size:0.78rem">${level}%</span></div>`;
+    }
+
+    function handleSearch() {
+        if (['printers','parque'].includes(currentPage)) {
+            const w = document.getElementById('printersTableWrap');
+            if (w) w.innerHTML = renderPrinterTable(currentFilter);
+        } else if (currentPage === 'clients') {
+            document.getElementById('contentArea').innerHTML = renderClientsPage();
+        }
+    }
+
+    function refreshNow() {
+        fetchData();
+        toast('🔄 Dados atualizados!');
+    }
+
+    function toast(msg, type = '') {
+        const el = document.getElementById('toast');
+        el.textContent = msg;
+        el.className = `toast show ${type}`;
+        clearTimeout(el._t);
+        el._t = setTimeout(() => el.classList.remove('show'), 3000);
+    }
+
+    // Fechar modais
+    document.addEventListener('click', e => { if (e.target.classList.contains('modal-overlay')) closeModal(e.target.id); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.active').forEach(m => closeModal(m.id)); });
+
+    // ========== INIT ==========
+    goTo('dashboard');
+    fetchData();
+
+    // Polling inteligente: a cada 10s busca dados mas só re-renderiza se não estiver no client-detail
+    setInterval(async () => {
+        await fetchData();
+        if (currentPage === 'reports') fetchJobsIfNeeded();
+    }, 10000);
+    </script>
+</body>
+</html>

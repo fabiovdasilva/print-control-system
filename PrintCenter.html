@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PrintCenter Pro | Gerenciamento de Impressoras</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js">
+    </script>
+    <style>
+        :root {
+            --bg-base: #0a0f16;
+            --bg-surface: #111923;
+            --bg-card: #182230;
+            --bg-hover: #1f2d3d;
+            --bg-input: #141e2b;
+            --border: #263240;
+            --border-light: #304050;
+            --text-primary: #e8edf4;
+            --text-secondary: #a0b4c8;
+            --text-muted: #6b8098;
+            --accent: #3b8beb;
+            --accent-glow: rgba(59, 139, 235, 0.25);
+            --green: #22c55e;
+            --green-bg: rgba(34, 197, 94, 0.1);
+            --yellow: #eab308;
+            --yellow-bg: rgba(234, 179, 8, 0.1);
+            --red: #ef4444;
+            --red-bg: rgba(239, 68, 68, 0.1);
+            --purple: #a855f7;
+            --purple-bg: rgba(168, 85, 247, 0.12);
+            --radius: 10px;
+            --radius-lg: 16px;
+            --radius-xl: 20px;
+            --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.3);
+            --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+            --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg-base);
+            color: var(--text-primary);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            letter-spacing: -0.01em;
+        }
+
+        /* SIDEBAR */
+        .sidebar {
+            width: 268px;
+            min-width: 268px;
+            background: var(--bg-surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
+            box-shadow: var(--shadow-card);
+        }
+        .sidebar-brand {
+            padding: 22px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+        .sidebar-brand .brand-icon {
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, var(--accent), #6366f1);
+            border-radius: var(--radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            color: #fff;
+            box-shadow: 0 4px 16px var(--accent-glow);
+        }
+        .sidebar-brand .brand-text {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--text-primary);
+            line-height: 1.2;
+        }
+        .sidebar-brand .brand-text small {
+            font-weight: 400;
+            font-size: 0.68rem;
+            color: var(--text-muted);
+            display: block;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+        .sidebar-nav {
+            flex: 1;
+            padding: 12px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            overflow-y: auto;
+        }
+        .sidebar-nav .nav-label {
+            font-size: 0.6rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-muted);
+            padding: 14px 12px 6px;
+            font-weight: 700;
+        }
+        .sidebar-nav a {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+            padding: 10px 14px;
+            border-radius: var(--radius);
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.88rem;
+            transition: all var(--transition);
+            cursor: pointer;
+            position: relative;
+        }
+        .sidebar-nav a:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        .sidebar-nav a.active {
+            background: var(--accent);
+            color: #fff;
+            font-weight: 600;
+            box-shadow: 0 4px 14px var(--accent-glow);
+        }
+        .sidebar-nav a i {
+            width: 18px;
+            text-align: center;
+            font-size: 0.95rem;
+        }
+        .sidebar-nav a .badge {
+            margin-left: auto;
+            background: var(--red);
+            color: #fff;
+            font-size: 0.65rem;
+            padding: 3px 9px;
+            border-radius: 20px;
+            font-weight: 700;
+        }
+        .sidebar-footer {
+            padding: 14px;
+            border-top: 1px solid var(--border);
+        }
+        .btn-agent {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 11px 14px;
+            background: linear-gradient(135deg, #16a34a, #15803d);
+            color: #fff;
+            border: none;
+            border-radius: 25px;
+            font-weight: 600;
+            font-size: 0.82rem;
+            cursor: pointer;
+            transition: all var(--transition);
+            letter-spacing: 0.02em;
+            box-shadow: 0 4px 14px rgba(22, 163, 74, 0.3);
+        }
+        .btn-agent:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(22, 163, 74, 0.45);
+        }
+
+        /* MAIN */
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .topbar {
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+            padding: 14px 26px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+            min-height: 64px;
+        }
+        .topbar .page-title {
+            font-weight: 700;
+            font-size: 1.15rem;
+            color: var(--text-primary);
+            white-space: nowrap;
+        }
+        .search-wrap {
+            display: flex;
+            align-items: center;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 30px;
+            padding: 9px 16px;
+            gap: 10px;
+            flex: 0 1 400px;
+            transition: all var(--transition);
+        }
+        .search-wrap:focus-within {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+        .search-wrap input {
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-size: 0.88rem;
+            outline: none;
+            width: 100%;
+        }
+        .search-wrap input::placeholder {
+            color: var(--text-muted);
+        }
+        .search-wrap i {
+            color: var(--text-muted);
+        }
+        .topbar-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .icon-btn {
+            width: 37px;
+            height: 37px;
+            border-radius: 50%;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all var(--transition);
+            font-size: 0.9rem;
+        }
+        .icon-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        .avatar-sm {
+            width: 37px;
+            height: 37px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.8rem;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        /* CONTENT */
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 22px 26px;
+            display: flex;
+            flex-direction: column;
+            gap: 22px;
+        }
+        .content::-webkit-scrollbar {
+            width: 5px;
+        }
+        .content::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .content::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 8px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+        }
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 18px 20px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            cursor: pointer;
+            transition: all var(--transition);
+            box-shadow: var(--shadow-card);
+        }
+        .stat-card:hover {
+            border-color: var(--border-light);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-lg);
+        }
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: var(--radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+        .stat-icon.blue {
+            background: rgba(59, 139, 235, 0.12);
+            color: var(--accent);
+        }
+        .stat-icon.green {
+            background: var(--green-bg);
+            color: var(--green);
+        }
+        .stat-icon.yellow {
+            background: var(--yellow-bg);
+            color: var(--yellow);
+        }
+        .stat-icon.purple {
+            background: var(--purple-bg);
+            color: var(--purple);
+        }
+        .stat-info .val {
+            font-size: 1.5rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+        .stat-info .lbl {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 3px;
+        }
+
+        .panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-card);
+            overflow: hidden;
+        }
+        .panel-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .panel-header h3 {
+            font-weight: 700;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+        }
+        .btn {
+            padding: 8px 16px;
+            border-radius: 22px;
+            font-weight: 600;
+            font-size: 0.8rem;
+            cursor: pointer;
+            border: none;
+            transition: all var(--transition);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+            letter-spacing: 0.02em;
+        }
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+            box-shadow: 0 2px 8px var(--accent-glow);
+        }
+        .btn-primary:hover {
+            background: #4d95f0;
+        }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border-light);
+            color: var(--text-secondary);
+        }
+        .btn-outline:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 0.72rem;
+            border-radius: 18px;
+        }
+        .btn-icon-text {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 5px 8px;
+            border-radius: 6px;
+            transition: all var(--transition);
+        }
+        .btn-icon-text:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        .btn-danger-text {
+            color: var(--red);
+        }
+        .btn-danger-text:hover {
+            background: var(--red-bg);
+        }
+
+        .filter-pills {
+            display: flex;
+            gap: 4px;
+            background: var(--bg-input);
+            border-radius: 24px;
+            padding: 4px;
+        }
+        .filter-pill {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.78rem;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            font-weight: 500;
+            transition: all var(--transition);
+            white-space: nowrap;
+        }
+        .filter-pill.active {
+            background: var(--accent);
+            color: #fff;
+            font-weight: 600;
+            box-shadow: 0 2px 6px var(--accent-glow);
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.83rem;
+        }
+        table thead th {
+            background: var(--bg-surface);
+            padding: 12px 14px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+        }
+        table tbody td {
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
+            white-space: nowrap;
+            vertical-align: middle;
+        }
+        table tbody tr {
+            transition: background var(--transition);
+            cursor: pointer;
+        }
+        table tbody tr:hover {
+            background: var(--bg-hover);
+        }
+        .dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .dot.online {
+            background: var(--green);
+            box-shadow: 0 0 6px var(--green);
+        }
+        .dot.offline {
+            background: var(--red);
+            box-shadow: 0 0 6px var(--red);
+        }
+        .dot.warning {
+            background: var(--yellow);
+            box-shadow: 0 0 6px var(--yellow);
+        }
+        .tag {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 14px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        .tag-green {
+            background: var(--green-bg);
+            color: var(--green);
+        }
+        .tag-red {
+            background: var(--red-bg);
+            color: var(--red);
+        }
+        .tag-yellow {
+            background: var(--yellow-bg);
+            color: var(--yellow);
+        }
+        .tag-purple {
+            background: var(--purple-bg);
+            color: var(--purple);
+        }
+
+        /* MODAL */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-xl);
+            width: 92%;
+            max-width: 780px;
+            max-height: 88vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow-lg);
+            transform: translateY(18px);
+            transition: transform 0.25s ease;
+        }
+        .modal-overlay.active .modal {
+            transform: translateY(0);
+        }
+        .modal-header {
+            padding: 18px 22px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            background: var(--bg-card);
+            z-index: 5;
+            border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+        }
+        .modal-header h2 {
+            font-weight: 700;
+            font-size: 1rem;
+        }
+        .modal-close {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: none;
+            background: var(--bg-hover);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-close:hover {
+            background: var(--red-bg);
+            color: var(--red);
+        }
+        .modal-body {
+            padding: 20px 22px;
+        }
+        .detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+        .detail-item {
+            background: var(--bg-surface);
+            padding: 12px 14px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+        }
+        .detail-item .lbl {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 3px;
+            font-weight: 600;
+        }
+        .detail-item .val {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+        .chart-box {
+            margin-top: 16px;
+            background: var(--bg-surface);
+            border-radius: var(--radius);
+            padding: 16px;
+            border: 1px solid var(--border);
+            height: 250px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+        .form-group {
+            margin-bottom: 14px;
+        }
+        .form-group label {
+            display: block;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+        }
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px 13px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            outline: none;
+            transition: all var(--transition);
+        }
+        .form-group input:focus,
+        .form-group select:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 28px;
+            right: 28px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 13px 22px;
+            border-radius: 28px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            z-index: 9999;
+            box-shadow: var(--shadow-lg);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+            pointer-events: none;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        @media (max-width: 1100px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .detail-grid {
+                grid-template-columns: 1fr;
+            }
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 64px;
+                min-width: 64px;
+            }
+            .sidebar .brand-text,
+            .sidebar-nav a span,
+            .sidebar-nav .nav-label,
+            .sidebar-footer .btn-agent span,
+            .sidebar-nav a .badge {
+                display: none;
+            }
+            .sidebar-nav a {
+                justify-content: center;
+                padding: 12px;
+            }
+            .sidebar-brand {
+                justify-content: center;
+            }
+            .content {
+                padding: 12px;
+            }
+            .topbar {
+                padding: 10px 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <div class="brand-icon"><i class="fas fa-print"></i></div>
+            <div class="brand-text">PrintCenter<small>Pro</small></div>
+        </div>
+        <nav class="sidebar-nav">
+            <div class="nav-label">Principal</div>
+            <a class="active" data-page="dashboard" onclick="goTo('dashboard')"><i class="fas fa-th-large"></i> <span>Dashboard</span></a>
+            <a data-page="clients" onclick="goTo('clients')"><i class="fas fa-building"></i> <span>Clientes</span></a>
+            <a data-page="printers" onclick="goTo('printers')"><i class="fas fa-print"></i> <span>Impressoras</span> <span class="badge" id="badgePrinters">8</span></a>
+            <a data-page="parque" onclick="goTo('parque')"><i class="fas fa-server"></i> <span>Parque Geral</span></a>
+            <div class="nav-label">Monitoramento</div>
+            <a data-page="alerts" onclick="goTo('alerts')"><i class="fas fa-bell"></i> <span>Alertas</span> <span class="badge" id="badgeAlerts">2</span></a>
+            <a data-page="reports" onclick="goTo('reports')"><i class="fas fa-chart-bar"></i> <span>Relatórios</span></a>
+            <a data-page="settings" onclick="goTo('settings')"><i class="fas fa-cog"></i> <span>Configurações</span></a>
+        </nav>
+        <div class="sidebar-footer">
+            <button class="btn-agent" onclick="downloadAgent()"><i class="fas fa-download"></i> <span>Baixar Agente Geral</span></button>
+        </div>
+    </aside>
+
+    <!-- MAIN -->
+    <div class="main">
+        <header class="topbar">
+            <div class="page-title" id="pageTitle">📊 Dashboard</div>
+            <div class="search-wrap">
+                <i class="fas fa-search"></i>
+                <input type="text" id="globalSearch" placeholder="Buscar impressoras, clientes, IP..." oninput="handleSearch()">
+            </div>
+            <div class="topbar-actions">
+                <button class="icon-btn" title="Notificações" onclick="goTo('alerts')"><i class="fas fa-bell"></i></button>
+                <button class="icon-btn" title="Atualizar dados" onclick="refreshData()"><i class="fas fa-sync-alt"></i></button>
+                <div class="avatar-sm">AD</div>
+            </div>
+        </header>
+        <div class="content" id="contentArea"></div>
+    </div>
+
+    <!-- MODAL IMPRESSORA -->
+    <div class="modal-overlay" id="modalPrinter">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modalPrinterTitle">🖨️ Detalhes da Impressora</h2>
+                <button class="modal-close" onclick="closeModal('modalPrinter')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" id="modalPrinterBody"></div>
+        </div>
+    </div>
+
+    <!-- MODAL CLIENTE -->
+    <div class="modal-overlay" id="modalClient">
+        <div class="modal" style="max-width:580px;">
+            <div class="modal-header">
+                <h2 id="modalClientTitle">👤 Novo Cliente</h2>
+                <button class="modal-close" onclick="closeModal('modalClient')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="clientForm" onsubmit="saveClient(event)">
+                    <input type="hidden" id="clientId">
+                    <div class="form-grid">
+                        <div class="form-group"><label>Nome *</label><input type="text" id="clientName" required placeholder="Empresa ABC"></div>
+                        <div class="form-group"><label>CNPJ/CPF</label><input type="text" id="clientDoc" placeholder="00.000.000/0000-00"></div>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group"><label>E-mail</label><input type="email" id="clientEmail" placeholder="email@empresa.com"></div>
+                        <div class="form-group"><label>Telefone</label><input type="text" id="clientPhone" placeholder="(11) 99999-9999"></div>
+                    </div>
+                    <div class="form-group"><label>Endereço</label><input type="text" id="clientAddress" placeholder="Rua, número, bairro, cidade - UF"></div>
+                    <div class="form-group"><label>Plano</label><select id="clientPlan"><option value="basic">Básico</option><option value="pro">Profissional</option><option value="enterprise">Enterprise</option></select></div>
+                    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;">
+                        <button type="button" class="btn btn-outline" onclick="closeModal('modalClient')">Cancelar</button>
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // ==================== DATA STORE ====================
+        const clients = [
+            { id: 1, name: 'TechCorp Brasil', doc: '12.345.678/0001-90', email: 'ti@techcorp.com', phone: '(11) 4002-8922',
+                address: 'Av. Paulista, 1000 - SP', plan: 'enterprise' },
+            { id: 2, name: 'Agência Criativa', doc: '98.765.432/0001-10', email: 'adm@criativa.com', phone: '(21) 3555-1234',
+                address: 'Rua das Laranjeiras, 200 - RJ', plan: 'pro' },
+            { id: 3, name: 'Clínica Bem Estar', doc: '45.678.901/0001-23', email: 'info@bemestar.com', phone: '(31) 3222-7788',
+                address: 'Av. Afonso Pena, 500 - BH', plan: 'basic' },
+            { id: 4, name: 'Construtora Alfa', doc: '11.222.333/0001-44', email: 'sup@conalfa.com', phone: '(41) 3090-5566',
+                address: 'Rua XV, 800 - Curitiba', plan: 'pro' },
+            { id: 5, name: 'Mercado Digital', doc: '55.666.777/0001-88', email: 'ti@mercadodigital.com', phone: '(51) 3456-9900',
+                address: 'Av. Borges, 300 - POA', plan: 'enterprise' },
+        ];
+
+        const printers = [
+            { id: 1, clientId: 1, clientName: 'TechCorp Brasil', model: 'HP LaserJet Pro M404dn', serial: 'HP-M404-001',
+                ip: '192.168.1.101', firmware: 'LJPro_2024.06A', status: 'online', pagesTotal: 45230, pagesToday: 187,
+                lastAccess: '26/06 14:32', toner: 72, drum: 85, location: 'Sala TI - 3º andar',
+                history: [45, 62, 38, 91, 55, 73, 187, 120, 88, 67, 95, 42, 58, 76] },
+            { id: 2, clientId: 1, clientName: 'TechCorp Brasil', model: 'HP Color LaserJet MFP M479fdw', serial: 'HP-M479-002',
+                ip: '192.168.1.102', firmware: 'CLJ_2025.01B', status: 'online', pagesTotal: 28750, pagesToday: 94,
+                lastAccess: '26/06 13:55', toner: 45, drum: 60, location: 'Recepção Térreo',
+                history: [30, 28, 55, 40, 62, 38, 94, 70, 45, 33, 50, 28, 41, 52] },
+            { id: 3, clientId: 2, clientName: 'Agência Criativa', model: 'Brother HL-L2350DW', serial: 'BR-L2350-003',
+                ip: '192.168.2.101', firmware: 'BRO_3.82', status: 'warning', pagesTotal: 12340, pagesToday: 22,
+                lastAccess: '26/06 10:18', toner: 12, drum: 40, location: 'Design 2º andar',
+                history: [15, 20, 10, 8, 18, 25, 22, 14, 9, 16, 12, 5, 19, 11] },
+            { id: 4, clientId: 2, clientName: 'Agência Criativa', model: 'Epson EcoTank L3250', serial: 'EP-L3250-004',
+                ip: '192.168.2.102', firmware: 'EPS_2.15', status: 'online', pagesTotal: 8900, pagesToday: 55,
+                lastAccess: '26/06 15:01', toner: 90, drum: 95, location: 'Criação 2º andar',
+                history: [22, 18, 30, 35, 28, 42, 55, 40, 33, 27, 38, 20, 31, 48] },
+            { id: 5, clientId: 3, clientName: 'Clínica Bem Estar', model: 'Samsung Xpress M2835DW', serial: 'SS-M2835-005',
+                ip: '192.168.3.101', firmware: 'SAM_1.44', status: 'offline', pagesTotal: 5600, pagesToday: 0,
+                lastAccess: '25/06 17:40', toner: 30, drum: 55, location: 'Administrativo',
+                history: [12, 8, 5, 15, 10, 0, 0, 7, 14, 9, 11, 6, 18, 0] },
+            { id: 6, clientId: 4, clientName: 'Construtora Alfa', model: 'HP OfficeJet Pro 9010', serial: 'HP-OJ9010-006',
+                ip: '192.168.4.101', firmware: 'OJP_2025.11C', status: 'online', pagesTotal: 34100, pagesToday: 210,
+                lastAccess: '26/06 16:05', toner: 55, drum: 70, location: 'Escritório Central',
+                history: [80, 95, 110, 130, 145, 160, 210, 175, 140, 120, 155, 100, 180, 200] },
+            { id: 7, clientId: 5, clientName: 'Mercado Digital', model: 'Canon imageCLASS MF445dw', serial: 'CN-MF445-007',
+                ip: '192.168.5.101', firmware: 'CAN_5.20', status: 'online', pagesTotal: 67800, pagesToday: 320,
+                lastAccess: '26/06 16:28', toner: 68, drum: 82, location: 'Logística 1º andar',
+                history: [150, 180, 200, 220, 250, 280, 320, 290, 260, 240, 270, 210, 300, 310] },
+            { id: 8, clientId: 5, clientName: 'Mercado Digital', model: 'Xerox VersaLink C405', serial: 'XR-C405-008',
+                ip: '192.168.5.102', firmware: 'XRX_7.31', status: 'warning', pagesTotal: 52100, pagesToday: 145,
+                lastAccess: '26/06 15:45', toner: 22, drum: 35, location: 'Marketing 3º andar',
+                history: [90, 100, 110, 105, 120, 135, 145, 130, 115, 108, 125, 95, 140, 138] },
+        ];
+
+        let currentPage = 'dashboard';
+        let currentClientId = null;
+        let currentFilter = 'all';
+
+        // ==================== NAVIGATION ====================
+        function goTo(page, clientId = null) {
+            currentPage = page;
+            currentClientId = clientId;
+            currentFilter = 'all';
+            document.getElementById('globalSearch').value = '';
+            document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
+            if (page === 'client-detail' && clientId) {
+                const clientsLink = document.querySelector('.sidebar-nav a[data-page="clients"]');
+                if (clientsLink) clientsLink.classList.add('active');
+            } else {
+                const link = document.querySelector(`.sidebar-nav a[data-page="${page}"]`);
+                if (link) link.classList.add('active');
+            }
+            const titles = {
+                'dashboard': '📊 Dashboard Geral',
+                'clients': '👥 Clientes',
+                'printers': '🖨️ Impressoras',
+                'parque': '🏢 Parque Geral',
+                'alerts': '🔔 Alertas',
+                'reports': '📈 Relatórios',
+                'settings': '⚙️ Configurações',
+                'client-detail': '📋 Dashboard do Cliente'
+            };
+            document.getElementById('pageTitle').textContent = titles[page] || page;
+            render();
+            updateBadges();
+        }
+
+        function render() {
+            const area = document.getElementById('contentArea');
+            switch (currentPage) {
+                case 'dashboard':
+                    area.innerHTML = renderDashboard();
+                    break;
+                case 'clients':
+                    area.innerHTML = renderClientsPage();
+                    break;
+                case 'printers':
+                    area.innerHTML = renderPrintersPage();
+                    break;
+                case 'parque':
+                    area.innerHTML = renderParquePage();
+                    break;
+                case 'client-detail':
+                    area.innerHTML = renderClientDetail(currentClientId);
+                    if (currentClientId) renderClientChart(currentClientId);
+                    break;
+                case 'alerts':
+                    area.innerHTML = renderAlertsPage();
+                    break;
+                default:
+                    area.innerHTML = renderPlaceholder(currentPage);
+            }
+            bindFilterEvents();
+        }
+
+        function updateBadges() {
+            document.getElementById('badgePrinters').textContent = printers.length;
+            const alertsCount = printers.filter(p => p.status === 'warning' || p.status === 'offline' || p.toner < 20)
+                .length;
+            document.getElementById('badgeAlerts').textContent = alertsCount;
+        }
+
+        function bindFilterEvents() {
+            const container = document.getElementById('filterPills');
+            if (!container) return;
+            container.querySelectorAll('.filter-pill').forEach(pill => {
+                pill.addEventListener('click', function() {
+                    container.querySelectorAll('.filter-pill').forEach(p => p.classList.remove(
+                        'active'));
+                    this.classList.add('active');
+                    currentFilter = this.dataset.filter;
+                    const tableWrap = document.getElementById('printersTableWrap');
+                    if (tableWrap) tableWrap.innerHTML = renderPrinterTable(currentFilter);
+                });
+            });
+        }
+
+        // ==================== DASHBOARD GERAL ====================
+        function renderDashboard() {
+            const total = printers.length;
+            const online = printers.filter(p => p.status === 'online').length;
+            const pagesToday = printers.reduce((s, p) => s + p.pagesToday, 0);
+            const totalClients = clients.length;
+            return `
+            <div class="stats-grid">
+              <div class="stat-card" onclick="goTo('printers')"><div class="stat-icon blue"><i class="fas fa-print"></i></div><div class="stat-info"><div class="val">${total}</div><div class="lbl">Impressoras</div></div></div>
+              <div class="stat-card" onclick="goTo('printers')"><div class="stat-icon green"><i class="fas fa-check-circle"></i></div><div class="stat-info"><div class="val">${online}</div><div class="lbl">Online</div></div></div>
+              <div class="stat-card"><div class="stat-icon yellow"><i class="fas fa-copy"></i></div><div class="stat-info"><div class="val">${pagesToday.toLocaleString()}</div><div class="lbl">Páginas Hoje</div></div></div>
+              <div class="stat-card" onclick="goTo('clients')"><div class="stat-icon purple"><i class="fas fa-building"></i></div><div class="stat-info"><div class="val">${totalClients}</div><div class="lbl">Clientes</div></div></div>
+            </div>
+            <div style="display:grid;grid-template-columns:2fr 1fr;gap:18px;">
+              <div class="panel">
+                <div class="panel-header"><h3>🖨️ Impressoras Recentes</h3><button class="btn btn-sm btn-outline" onclick="goTo('printers')">Ver todas</button></div>
+                <div class="table-wrap">${renderSimpleTable(printers.slice(0,5))}</div>
+              </div>
+              <div class="panel">
+                <div class="panel-header"><h3>👥 Clientes</h3><button class="btn btn-sm btn-outline" onclick="goTo('clients')">Gerenciar</button></div>
+                <div style="padding:10px;display:flex;flex-direction:column;gap:8px;">
+                  ${clients.slice(0,5).map(c => {
+                    const cp = printers.filter(p => p.clientId === c.id);
+                    return `<div style="background:var(--bg-surface);padding:10px 12px;border-radius:8px;cursor:pointer;" onclick="goTo('client-detail',${c.id})">
+                      <strong>${c.name}</strong><br><small style="color:var(--text-muted);">${cp.length} impressora(s) · ${cp.filter(p=>p.status==='online').length} online</small>
+                    </div>`;
+                  }).join('')}
+                </div>
+              </div>
+            </div>`;
+        }
+
+        function renderSimpleTable(list) {
+            return `<table><thead><tr><th>Impressora</th><th>Cliente</th><th>Status</th><th>Pág Hoje</th><th>IP</th></tr></thead><tbody>
+            ${list.map(p => `<tr onclick="openPrinterModal(${p.id})"><td><strong>${p.model}</strong><br><small>${p.serial}</small></td><td>${p.clientName}</td><td>${statusTag(p.status)}</td><td>${p.pagesToday}</td><td><code>${p.ip}</code></td></tr>`).join('')}
+            </tbody></table>`;
+        }
+
+        // ==================== CLIENTES ====================
+        function renderClientsPage() {
+            const search = document.getElementById('globalSearch')?.value?.toLowerCase() || '';
+            let filtered = clients;
+            if (search) filtered = clients.filter(c => c.name.toLowerCase().includes(search) || c.doc.includes(search) || c
+                .email.toLowerCase().includes(search));
+            return `
+            <div class="panel">
+              <div class="panel-header"><h3>Clientes Cadastrados</h3><button class="btn btn-primary" onclick="openClientModal()"><i class="fas fa-plus"></i> Novo Cliente</button></div>
+              <div class="table-wrap">
+                <table><thead><tr><th>Cliente</th><th>Documento</th><th>Impressoras</th><th>Páginas Hoje</th><th>Plano</th><th>Ações</th></tr></thead><tbody>
+                ${filtered.map(c => {
+                  const cp = printers.filter(p => p.clientId === c.id);
+                  const pt = cp.reduce((s,p) => s + p.pagesToday, 0);
+                  return `<tr>
+                    <td><strong>${c.name}</strong><br><small>${c.email}</small></td>
+                    <td>${c.doc}</td><td><strong>${cp.length}</strong></td><td>${pt.toLocaleString()}</td>
+                    <td>${planTag(c.plan)}</td>
+                    <td>
+                      <button class="btn btn-sm btn-primary" onclick="goTo('client-detail',${c.id})"><i class="fas fa-chart-pie"></i> Dashboard</button>
+                      <button class="btn-icon-text" onclick="openClientModal(${c.id})"><i class="fas fa-edit"></i></button>
+                      <button class="btn-icon-text btn-danger-text" onclick="deleteClient(${c.id})"><i class="fas fa-trash"></i></button>
+                    </td>
+                  </tr>`;
+                }).join('')}
+                ${filtered.length===0?'<tr><td colspan="6" style="text-align:center;padding:30px;">Nenhum cliente.</td></tr>':''}
+                </tbody></table>
+              </div>
+            </div>`;
+        }
+
+        // ==================== DETALHE CLIENTE ====================
+        function renderClientDetail(clientId) {
+            const client = clients.find(c => c.id === clientId);
+            if (!client) return '<div class="panel"><div class="panel-header"><h3>Cliente não encontrado</h3></div></div>';
+            const cp = printers.filter(p => p.clientId === clientId);
+            const total = cp.length;
+            const online = cp.filter(p => p.status === 'online').length;
+            const pagesToday = cp.reduce((s, p) => s + p.pagesToday, 0);
+            const pagesTotal = cp.reduce((s, p) => s + p.pagesTotal, 0);
+            const lowToner = cp.filter(p => p.toner < 20).length;
+            const agentFile = `Agent_${client.name.replace(/\s+/g,'_')}_v1.2.exe`;
+            document.getElementById('pageTitle').textContent = `📋 ${client.name}`;
+            return `
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+              <div><h2 style="font-size:1.4rem;">${client.name}</h2><p style="color:var(--text-muted);">${client.doc} · ${client.email} · ${client.phone}</p></div>
+              <div style="display:flex;gap:8px;">
+                <button class="btn btn-outline" onclick="openClientModal(${client.id})"><i class="fas fa-edit"></i> Editar</button>
+                <button class="btn btn-primary" onclick="downloadClientAgent(${client.id})"><i class="fas fa-download"></i> Baixar Agente</button>
+              </div>
+            </div>
+            <div class="stats-grid">
+              <div class="stat-card"><div class="stat-icon blue"><i class="fas fa-print"></i></div><div class="stat-info"><div class="val">${total}</div><div class="lbl">Impressoras</div></div></div>
+              <div class="stat-card"><div class="stat-icon green"><i class="fas fa-check-circle"></i></div><div class="stat-info"><div class="val">${online}</div><div class="lbl">Online</div></div></div>
+              <div class="stat-card"><div class="stat-icon yellow"><i class="fas fa-copy"></i></div><div class="stat-info"><div class="val">${pagesToday.toLocaleString()}</div><div class="lbl">Páginas Hoje</div></div></div>
+              <div class="stat-card"><div class="stat-icon purple"><i class="fas fa-chart-line"></i></div><div class="stat-info"><div class="val">${pagesTotal.toLocaleString()}</div><div class="lbl">Total Páginas</div></div></div>
+            </div>
+            <div style="display:grid;grid-template-columns:2fr 1fr;gap:18px;">
+              <div class="panel"><div class="panel-header"><h3>📈 Histórico de Impressão (14 dias)</h3></div><div class="chart-box"><canvas id="clientChart"></canvas></div></div>
+              <div class="panel"><div class="panel-header"><h3>⚠️ Resumo</h3></div>
+                <div style="padding:14px;display:flex;flex-direction:column;gap:10px;">
+                  <div style="background:var(--yellow-bg);padding:10px;border-radius:8px;"><i class="fas fa-tint"></i> <strong>${lowToner}</strong> toner baixo</div>
+                  <div style="background:var(--red-bg);padding:10px;border-radius:8px;"><i class="fas fa-exclamation-triangle"></i> <strong>${cp.filter(p=>p.status==='offline').length}</strong> offline</div>
+                  <button class="btn btn-sm btn-outline" onclick="downloadClientAgent(${client.id})"><i class="fas fa-download"></i> ${agentFile}</button>
+                </div>
+              </div>
+            </div>
+            <div class="panel"><div class="panel-header"><h3>🖨️ Impressoras do Cliente</h3></div><div class="table-wrap">${renderSimpleTable(cp)}</div></div>`;
+        }
+
+        function renderClientChart(clientId) {
+            const cp = printers.filter(p => p.clientId === clientId);
+            const agg = new Array(14).fill(0);
+            cp.forEach(p => p.history.forEach((v, i) => { if (i < 14) agg[i] += v; }));
+            setTimeout(() => {
+                const ctx = document.getElementById('clientChart');
+                if (ctx) {
+                    if (window._clientChart) window._clientChart.destroy();
+                    window._clientChart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: ['13/06', '14/06', '15/06', '16/06', '17/06', '18/06', '19/06', '20/06',
+                                '21/06', '22/06', '23/06', '24/06', '25/06', '26/06'
+                            ],
+                            datasets: [{ label: 'Páginas', data: agg,
+                                backgroundColor: 'rgba(99,102,241,0.55)', borderColor: '#818cf8',
+                                borderWidth: 2, borderRadius: 6 }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { labels: { color: '#a0b4c8' } } },
+                            scales: {
+                                x: { ticks: { color: '#6b8098' }, grid: { color: '#263240' } },
+                                y: { ticks: { color: '#6b8098' }, grid: { color: '#263240' },
+                                    beginAtZero: true }
+                            }
+                        }
+                    });
+                }
+            }, 250);
+        }
+
+        function downloadClientAgent(clientId) {
+            const client = clients.find(c => c.id === clientId);
+            if (!client) return;
+            const filename = `Agent_${client.name.replace(/\s+/g,'_')}_Setup.exe`;
+            toast(`⬇️ Baixando agente: ${filename}`);
+        }
+
+        // ==================== IMPRESSORAS / PARQUE ====================
+        function renderPrintersPage() {
+            return renderFilterableTable('🖨️ Impressoras Monitoradas');
+        }
+
+        function renderParquePage() {
+            return renderFilterableTable('🏢 Parque Geral de Impressoras');
+        }
+
+        function renderFilterableTable(title) {
+            return `
+            <div class="panel">
+              <div class="panel-header"><h3>${title}</h3>
+                <div class="filter-pills" id="filterPills">
+                  <button class="filter-pill active" data-filter="all">Todas</button>
+                  <button class="filter-pill" data-filter="online">Online</button>
+                  <button class="filter-pill" data-filter="warning">Atenção</button>
+                  <button class="filter-pill" data-filter="offline">Offline</button>
+                </div>
+              </div>
+              <div class="table-wrap" id="printersTableWrap">${renderPrinterTable('all')}</div>
+            </div>`;
+        }
+
+        function renderPrinterTable(filter) {
+            let list = printers;
+            const search = document.getElementById('globalSearch')?.value?.toLowerCase() || '';
+            if (filter && filter !== 'all') list = list.filter(p => p.status === filter);
+            if (search) list = list.filter(p => p.model.toLowerCase().includes(search) || p.clientName.toLowerCase()
+                .includes(search) || p.ip.includes(search) || p.serial.toLowerCase().includes(search) || p.location
+                .toLowerCase().includes(search));
+            return `<table><thead><tr><th>Impressora</th><th>Cliente</th><th>Status</th><th>IP</th><th>Pág Total</th><th>Pág Hoje</th><th>Toner</th><th>Último Acesso</th></tr></thead><tbody>
+            ${list.map(p => `<tr onclick="openPrinterModal(${p.id})"><td><strong>${p.model}</strong><br><small>${p.serial}</small></td><td>${p.clientName}</td><td>${statusTag(p.status)}</td><td><code>${p.ip}</code></td><td>${p.pagesTotal.toLocaleString()}</td><td>${p.pagesToday}</td><td>${tonerBar(p.toner)}</td><td>${p.lastAccess}</td></tr>`).join('')}
+            ${list.length===0?'<tr><td colspan="8" style="text-align:center;padding:30px;">Nenhuma impressora encontrada.</td></tr>':''}
+            </tbody></table>`;
+        }
+
+        // ==================== ALERTAS ====================
+        function renderAlertsPage() {
+            const warning = printers.filter(p => p.status === 'warning' || p.status === 'offline' || p.toner < 20);
+            return `<div class="panel"><div class="panel-header"><h3>🔔 Alertas Ativos</h3></div>
+            <div class="table-wrap"><table><thead><tr><th>Impressora</th><th>Cliente</th><th>Tipo</th><th>Detalhes</th></tr></thead><tbody>
+            ${warning.map(p => {
+              let type = p.status === 'offline' ? '<span class="tag tag-red">Offline</span>' : p.toner < 20 ? '<span class="tag tag-yellow">Toner Baixo</span>' : '<span class="tag tag-yellow">Atenção</span>';
+              return `<tr onclick="openPrinterModal(${p.id})"><td>${p.model}</td><td>${p.clientName}</td><td>${type}</td><td>Toner ${p.toner}% · Status: ${p.status}</td></tr>`;
+            }).join('')}
+            ${warning.length===0?'<tr><td colspan="4" style="text-align:center;padding:30px;">Nenhum alerta.</td></tr>':''}
+            </tbody></table></div></div>`;
+        }
+
+        function renderPlaceholder(page) {
+            return `<div class="panel"><div class="panel-header"><h3>${page}</h3></div><div style="padding:40px;text-align:center;color:var(--text-muted);">Em breve...</div></div>`;
+        }
+
+        // ==================== MODAIS ====================
+        function openPrinterModal(id) {
+            const p = printers.find(pr => pr.id === id);
+            if (!p) return;
+            document.getElementById('modalPrinterTitle').textContent = `🖨️ ${p.model}`;
+            document.getElementById('modalPrinterBody').innerHTML = `
+            <div class="detail-grid">
+              <div class="detail-item"><div class="lbl">Modelo</div><div class="val">${p.model}</div></div>
+              <div class="detail-item"><div class="lbl">Nº Série</div><div class="val">${p.serial}</div></div>
+              <div class="detail-item"><div class="lbl">Status</div><div class="val">${statusTag(p.status)}</div></div>
+              <div class="detail-item"><div class="lbl">IP</div><div class="val"><code>${p.ip}</code></div></div>
+              <div class="detail-item"><div class="lbl">Firmware</div><div class="val">${p.firmware}</div></div>
+              <div class="detail-item"><div class="lbl">Localização</div><div class="val">${p.location}</div></div>
+              <div class="detail-item"><div class="lbl">Contador Total</div><div class="val">${p.pagesTotal.toLocaleString()} pág.</div></div>
+              <div class="detail-item"><div class="lbl">Páginas Hoje</div><div class="val">${p.pagesToday}</div></div>
+              <div class="detail-item"><div class="lbl">Toner</div><div class="val">${tonerBar(p.toner)}</div></div>
+              <div class="detail-item"><div class="lbl">Cilindro</div><div class="val">${p.drum}%</div></div>
+              <div class="detail-item"><div class="lbl">Cliente</div><div class="val">${p.clientName}</div></div>
+              <div class="detail-item"><div class="lbl">Último Acesso</div><div class="val">${p.lastAccess}</div></div>
+            </div>
+            <div class="chart-box"><canvas id="historyChart"></canvas></div>`;
+            document.getElementById('modalPrinter').classList.add('active');
+            setTimeout(() => {
+                const ctx = document.getElementById('historyChart');
+                if (ctx) {
+                    if (window._histChart) window._histChart.destroy();
+                    window._histChart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: ['13/06', '14/06', '15/06', '16/06', '17/06', '18/06', '19/06', '20/06',
+                                '21/06', '22/06', '23/06', '24/06', '25/06', '26/06'
+                            ],
+                            datasets: [{ label: 'Páginas', data: p.history,
+                                backgroundColor: 'rgba(59,139,235,0.55)', borderColor: '#3b8beb',
+                                borderWidth: 2, borderRadius: 6 }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { labels: { color: '#a0b4c8' } } },
+                            scales: { x: { ticks: { color: '#6b8098' }, grid: { color: '#263240' } },
+                                y: { ticks: { color: '#6b8098' }, grid: { color: '#263240' },
+                                beginAtZero: true } }
+                        }
+                    });
+                }
+            }, 300);
+        }
+
+        function openClientModal(id = null) {
+            const title = document.getElementById('modalClientTitle');
+            if (id) {
+                const c = clients.find(cl => cl.id === id);
+                if (c) {
+                    title.textContent = '✏️ Editar Cliente';
+                    document.getElementById('clientId').value = c.id;
+                    document.getElementById('clientName').value = c.name;
+                    document.getElementById('clientDoc').value = c.doc;
+                    document.getElementById('clientEmail').value = c.email;
+                    document.getElementById('clientPhone').value = c.phone;
+                    document.getElementById('clientAddress').value = c.address;
+                    document.getElementById('clientPlan').value = c.plan;
+                }
+            } else {
+                title.textContent = '👤 Novo Cliente';
+                document.getElementById('clientId').value = '';
+                document.getElementById('clientForm').reset();
+            }
+            document.getElementById('modalClient').classList.add('active');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+            if (window._histChart) { window._histChart.destroy();
+                window._histChart = null; }
+            if (window._clientChart) { window._clientChart.destroy();
+                window._clientChart = null; }
+        }
+
+        function saveClient(event) {
+            event.preventDefault();
+            const id = document.getElementById('clientId').value;
+            const data = {
+                name: document.getElementById('clientName').value,
+                doc: document.getElementById('clientDoc').value,
+                email: document.getElementById('clientEmail').value,
+                phone: document.getElementById('clientPhone').value,
+                address: document.getElementById('clientAddress').value,
+                plan: document.getElementById('clientPlan').value,
+            };
+            if (id) {
+                const idx = clients.findIndex(c => c.id == id);
+                if (idx >= 0) {
+                    clients[idx] = { ...clients[idx], ...data };
+                    printers.forEach(p => { if (p.clientId == id) p.clientName = data.name; });
+                }
+            } else {
+                const newId = Math.max(...clients.map(c => c.id), 0) + 1;
+                clients.push({ ...data, id: newId });
+            }
+            closeModal('modalClient');
+            render();
+            updateBadges();
+            toast(id ? 'Cliente atualizado!' : 'Cliente criado com sucesso!');
+        }
+
+        function deleteClient(id) {
+            if (!confirm('Excluir cliente e suas impressoras?')) return;
+            clients.splice(clients.findIndex(c => c.id === id), 1);
+            for (let i = printers.length - 1; i >= 0; i--) { if (printers[i].clientId === id) printers.splice(i, 1); }
+            if (currentPage === 'client-detail' && currentClientId === id) goTo('clients');
+            else render();
+            updateBadges();
+            toast('Cliente excluído.');
+        }
+
+        // ==================== HELPERS ====================
+        function statusTag(s) {
+            const map = {
+                online: '<span class="tag tag-green"><span class="dot online"></span>Online</span>',
+                offline: '<span class="tag tag-red"><span class="dot offline"></span>Offline</span>',
+                warning: '<span class="tag tag-yellow"><span class="dot warning"></span>Atenção</span>'
+            };
+            return map[s] || s;
+        }
+
+        function planTag(p) {
+            const map = {
+                basic: '<span class="tag tag-yellow">Básico</span>',
+                pro: '<span class="tag tag-green">Profissional</span>',
+                enterprise: '<span class="tag tag-purple">Enterprise</span>'
+            };
+            return map[p] || p;
+        }
+
+        function tonerBar(level) {
+            let color = 'var(--green)';
+            if (level < 20) color = 'var(--red)';
+            else if (level < 40) color = 'var(--yellow)';
+            return `<div style="display:flex;align-items:center;gap:5px;"><div style="width:44px;height:5px;background:var(--bg-input);border-radius:6px;overflow:hidden;"><div style="width:${level}%;height:100%;background:${color};border-radius:6px;"></div></div>${level}%</div>`;
+        }
+
+        function handleSearch() {
+            if (['printers', 'parque'].includes(currentPage)) {
+                const wrap = document.getElementById('printersTableWrap');
+                if (wrap) wrap.innerHTML = renderPrinterTable(currentFilter);
+            } else if (currentPage === 'clients') {
+                document.getElementById('contentArea').innerHTML = renderClientsPage();
+            }
+        }
+
+        function refreshData() {
+            toast('🔄 Dados atualizados!');
+            render();
+            updateBadges();
+        }
+
+        function downloadAgent() {
+            toast('⬇️ Download do Agente Geral iniciado!');
+        }
+
+        function toast(msg) {
+            const el = document.getElementById('toast');
+            el.textContent = msg;
+            el.classList.add('show');
+            clearTimeout(el._t);
+            el._t = setTimeout(() => el.classList.remove('show'), 2400);
+        }
+
+        // Fechar modais ao clicar no overlay ou ESC
+        document.addEventListener('click', e => {
+            if (e.target.classList.contains('modal-overlay')) closeModal(e.target.id);
+        });
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.active').forEach(m => closeModal(m
+                .id));
+        });
+
+        // Inicializar
+        goTo('dashboard');
+    </script>
+</body>
+</html>

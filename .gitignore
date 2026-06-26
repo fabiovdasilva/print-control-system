@@ -1,0 +1,13 @@
+# Visual Studio / .NET
+bin/
+obj/
+.vs/
+*.user
+*.suo
+
+# Banco de Dados temporários do SQLite
+*.db-shm
+*.db-wal
+
+# Logs
+*.log
