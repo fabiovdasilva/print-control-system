@@ -11,6 +11,8 @@ import { cn } from "@/lib/utils";
 import { Building2, Cpu, Network, Save, Search, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const tabs = ["dashboard", "impressoras", "relatorios", "bilhetagem", "rede", "config"] as const;
 type Tab = (typeof tabs)[number];
@@ -462,6 +464,8 @@ function NetworkTab({ client, clientRaw, printers }: { client: any, clientRaw: a
   const [snmp, setSnmp] = useState(clientRaw.snmpCommunity || "public");
   const [poll, setPoll] = useState(clientRaw.pollInterval?.toString() || "15");
   const [isScanning, setIsScanning] = useState(false);
+  const [scanResults, setScanResults] = useState<any[] | null>(null);
+  const [printerDecisions, setPrinterDecisions] = useState<Record<string, boolean>>({});
 
   const { data: agentStatus } = useQuery({
     queryKey: ['agentStatus', client.id],
@@ -517,21 +521,58 @@ function NetworkTab({ client, clientRaw, printers }: { client: any, clientRaw: a
     try {
       const res = await fetch(`${API_BASE}/admin/force-scan/${client.id}`, { method: 'POST' });
       if (res.ok) {
-         toast.success("Ordem de varredura enviada! Aguarde o agente processar...", {
-           description: "Isso pode levar alguns instantes dependendo do tamanho da rede."
+         const data = await res.json();
+         setSubnets(data.network);
+         toast.success("Varredura concluída", {
+           description: "Rede detectada e impressoras encontradas."
          });
+         
+         if (data.discovered && data.discovered.length > 0) {
+             setScanResults(data.discovered);
+             const initDecisions: Record<string, boolean> = {};
+             data.discovered.forEach((d: any) => initDecisions[d.ip] = true);
+             setPrinterDecisions(initDecisions);
+         } else {
+             toast.info("Nenhuma impressora nova encontrada na rede.");
+         }
       } else {
          toast.error("Erro ao solicitar varredura.");
       }
     } catch (err) {
       console.error(err);
       toast.error("Erro na comunicação com o servidor.");
-    }
-    
-    // Mantém o estado de loading visual por alguns segundos para feedback
-    setTimeout(() => {
+    } finally {
       setIsScanning(false);
-    }, 5000);
+    }
+  };
+
+  const handleApprove = async () => {
+    if (!scanResults) return;
+    
+    const payload = scanResults.map(p => ({
+        clientId: client.id,
+        ipAddress: p.ip,
+        model: p.model,
+        isMonitored: printerDecisions[p.ip]
+    }));
+    
+    try {
+        const res = await fetch(`${API_BASE}/printers/approve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+            const data = await res.json();
+            toast.success("Impressoras salvas!", { description: data.message });
+            setScanResults(null);
+            queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+        } else {
+            toast.error("Erro ao salvar aprovação.");
+        }
+    } catch (err) {
+        toast.error("Erro de comunicação.");
+    }
   };
 
   return (
@@ -647,6 +688,53 @@ function NetworkTab({ client, clientRaw, printers }: { client: any, clientRaw: a
           </button>
         </div>
       </Panel>
+
+      {scanResults && (
+        <Dialog open={true} onOpenChange={(open) => !open && setScanResults(null)}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Aprovação de Impressoras</DialogTitle>
+              <DialogDescription>
+                A varredura encontrou os seguintes dispositivos na rede <strong>{subnets}</strong>. Selecione quais você deseja monitorar.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-3 py-4">
+               {scanResults.map((p, idx) => (
+                   <div key={idx} className="flex items-center space-x-3 rounded-lg border p-3">
+                       <Checkbox 
+                           id={`printer-${idx}`} 
+                           checked={printerDecisions[p.ip]}
+                           onCheckedChange={(c) => setPrinterDecisions(prev => ({...prev, [p.ip]: !!c}))}
+                       />
+                       <div className="flex-1">
+                           <label htmlFor={`printer-${idx}`} className="text-sm font-medium leading-none cursor-pointer">
+                               {p.ip}
+                           </label>
+                           <p className="text-xs text-muted-foreground mt-1">{p.model} ({p.mac})</p>
+                       </div>
+                       <div className="text-xs font-semibold">
+                           {printerDecisions[p.ip] ? <span className="text-emerald-500">Monitorar</span> : <span className="text-muted-foreground">Ocultar</span>}
+                       </div>
+                   </div>
+               ))}
+            </div>
+            <DialogFooter>
+              <button 
+                 onClick={() => setScanResults(null)}
+                 className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
+              >
+                 Cancelar
+              </button>
+              <button 
+                 onClick={handleApprove}
+                 className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                 Salvar e Aplicar
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

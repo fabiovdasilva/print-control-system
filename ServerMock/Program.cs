@@ -253,30 +253,71 @@ app.MapDelete("/api/printers/{id}", async (int id, AppDbContext db) =>
 // ==========================================
 
 // Scan com suporte a IP/faixa manual (corpo opcional)
-app.MapPost("/api/admin/force-scan/{clientId}", async (int clientId, HttpRequest request) =>
+app.MapPost("/api/admin/force-scan/{clientId}", async (int clientId, AppDbContext db, HttpRequest request) =>
 {
-    string customIp = "";
+    // Auto-detect local IP to simulate real scan
+    string localIp = "192.168.0.1";
     try
     {
-        if (request.ContentLength > 0)
-        {
-            using var reader = new StreamReader(request.Body);
-            var body = await reader.ReadToEndAsync();
-            using var doc = JsonDocument.Parse(body);
-            if (doc.RootElement.TryGetProperty("customIp", out var ipProp))
-                customIp = ipProp.GetString()?.Trim() ?? "";
-        }
+        var host = System.Net.Dns.GetHostEntry(System.Net.Dns.GetHostName());
+        var ip = host.AddressList.FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
+        if (ip != null) localIp = ip.ToString();
     }
     catch { }
 
-    string command = string.IsNullOrEmpty(customIp)
-        ? "SCAN_NETWORK"
-        : $"SCAN_IP:{customIp}";
+    var parts = localIp.Split('.');
+    string detectedSubnet = parts.Length == 4 ? $"{parts[0]}.{parts[1]}.{parts[2]}.0/24" : "192.168.0.0/24";
 
-    pendingCommands[clientId] = command;
-    return Results.Ok(new { message = string.IsNullOrEmpty(customIp)
-        ? "Varredura automática enviada ao agente!"
-        : $"Scan forçado no IP {customIp} enviado ao agente!" });
+    var client = await db.Clients.FindAsync(clientId);
+    if (client != null)
+    {
+        client.NetworkSubnets = detectedSubnet;
+        await db.SaveChangesAsync();
+    }
+
+    // Simulate network sweep delay (2 seconds)
+    await Task.Delay(2000);
+
+    // Mock discovered printers based on the local IP
+    var discovered = new[]
+    {
+        new { ip = $"{parts[0]}.{parts[1]}.{parts[2]}.115", model = "HP LaserJet Pro M404", mac = "00:1A:2B:3C:4D:5E" },
+        new { ip = $"{parts[0]}.{parts[1]}.{parts[2]}.116", model = "Brother HL-L8360CDW", mac = "00:1A:2B:3C:4D:5F" }
+    };
+
+    return Results.Ok(new { 
+        message = "Varredura concluída", 
+        network = detectedSubnet,
+        discovered = discovered 
+    });
+});
+
+app.MapPost("/api/printers/approve", async (List<ApprovePrinterRequest> reqs, AppDbContext db) =>
+{
+    int added = 0;
+    foreach (var req in reqs)
+    {
+        if (req.IsMonitored)
+        {
+            var exists = await db.Printers.AnyAsync(p => p.ClientId == req.ClientId && p.IPAddress == req.IPAddress);
+            if (!exists)
+            {
+                db.Printers.Add(new Printer
+                {
+                    ClientId = req.ClientId,
+                    IPAddress = req.IPAddress,
+                    Model = req.Model,
+                    Status = "online",
+                    TonerLevel = 100,
+                    IsMonitored = true,
+                    DiscoveredAt = DateTime.UtcNow
+                });
+                added++;
+            }
+        }
+    }
+    if (added > 0) await db.SaveChangesAsync();
+    return Results.Ok(new { message = $"{added} impressoras aprovadas e monitoradas." });
 });
 
 // Enviar comando de desinstalação para o agente
@@ -597,4 +638,12 @@ app.Run("http://0.0.0.0:5000");
 public class AgentRoleConfig {
     public bool IsScannerEnabled { get; set; } = false;
     public bool IsSpoolerEnabled { get; set; } = true;
+}
+
+public class ApprovePrinterRequest
+{
+    public int ClientId { get; set; }
+    public string IPAddress { get; set; } = "";
+    public string Model { get; set; } = "";
+    public bool IsMonitored { get; set; } = true;
 }
