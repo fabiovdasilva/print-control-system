@@ -27,7 +27,7 @@ namespace Agent
                 }
 
                 string installDir = @"C:\ProgramData\PrintCenterAgent";
-                string currentExe = Process.GetCurrentProcess().MainModule?.FileName ?? "";
+                string currentExe = Environment.ProcessPath ?? "";
                 string targetExe  = Path.Combine(installDir, "PrintAgent.exe");
 
                 bool isAlreadyInstalled = currentExe.Equals(targetExe, StringComparison.OrdinalIgnoreCase);
