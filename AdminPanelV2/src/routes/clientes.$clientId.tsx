@@ -8,7 +8,8 @@ import { StatusPill, TonerCMYK } from "@/components/StatusPill";
 
 import { fetchDashboardTotals, API_BASE } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { Building2, Cpu, Network, Save, Search } from "lucide-react";
+import { Building2, Cpu, Network, Save, Search, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { useState } from "react";
 
 const tabs = ["dashboard", "impressoras", "relatorios", "bilhetagem", "rede", "config"] as const;
@@ -460,6 +461,7 @@ function NetworkTab({ client, clientRaw, printers }: { client: any, clientRaw: a
   const [subnets, setSubnets] = useState(clientRaw.networkSubnets || "");
   const [snmp, setSnmp] = useState(clientRaw.snmpCommunity || "public");
   const [poll, setPoll] = useState(clientRaw.pollInterval?.toString() || "15");
+  const [isScanning, setIsScanning] = useState(false);
 
   const { data: agentStatus } = useQuery({
     queryKey: ['agentStatus', client.id],
@@ -511,17 +513,25 @@ function NetworkTab({ client, clientRaw, printers }: { client: any, clientRaw: a
   };
 
   const handleForceScan = async () => {
+    setIsScanning(true);
     try {
       const res = await fetch(`${API_BASE}/admin/force-scan/${client.id}`, { method: 'POST' });
       if (res.ok) {
-         alert("Comando de varredura enviado. O agente responsável executará a busca em breve.");
+         toast.success("Ordem de varredura enviada! Aguarde o agente processar...", {
+           description: "Isso pode levar alguns instantes dependendo do tamanho da rede."
+         });
       } else {
-         alert("Erro ao solicitar varredura.");
+         toast.error("Erro ao solicitar varredura.");
       }
     } catch (err) {
       console.error(err);
-      alert("Erro na comunicação com o servidor.");
+      toast.error("Erro na comunicação com o servidor.");
     }
+    
+    // Mantém o estado de loading visual por alguns segundos para feedback
+    setTimeout(() => {
+      setIsScanning(false);
+    }, 5000);
   };
 
   return (
@@ -624,8 +634,13 @@ function NetworkTab({ client, clientRaw, printers }: { client: any, clientRaw: a
           </div>
         </div>
         <div className="mt-6 flex justify-end gap-3">
-          <button onClick={handleForceScan} className="flex items-center gap-2 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted">
-            <Search className="size-4" /> Forçar Varredura
+          <button 
+            onClick={handleForceScan} 
+            disabled={isScanning}
+            className="flex items-center gap-2 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isScanning ? <Loader2 className="size-4 animate-spin text-primary" /> : <Search className="size-4" />}
+            {isScanning ? "Aguardando agente..." : "Forçar Varredura"}
           </button>
           <button onClick={handleSave} className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
             <Save className="size-4" /> Salvar Rede
