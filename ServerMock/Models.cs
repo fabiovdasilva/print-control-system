@@ -13,6 +13,11 @@ namespace ServerMock.Models
         public string Phone { get; set; } = string.Empty;
         public string Address { get; set; } = string.Empty;
         public string Plan { get; set; } = "basic"; // basic, pro, enterprise
+        public int OfflineToleranceHours { get; set; } = 48; // Tempo de tolerância para falso offline
+        
+        public string NetworkSubnets { get; set; } = string.Empty; // ex: 192.168.1.0/24
+        public string SnmpCommunity { get; set; } = "public";
+        public int PollInterval { get; set; } = 15; // em minutos
         
         public List<Printer> Printers { get; set; } = new();
         public List<PrintJob> PrintJobs { get; set; } = new();

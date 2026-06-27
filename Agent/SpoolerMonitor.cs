@@ -25,12 +25,16 @@ namespace Agent
             }
         }
 
+        public static bool IsRunning => _watcher != null;
+
         public static void Stop()
         {
             if (_watcher != null)
             {
                 _watcher.Stop();
                 _watcher.Dispose();
+                _watcher = null;
+                Console.WriteLine("[Agente] Spooler WMI desligado.");
             }
         }
 

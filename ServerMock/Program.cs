@@ -34,11 +34,22 @@ using (var scope = app.Services.CreateScope())
     try {
         db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS UserQuotas (Id INTEGER NOT NULL CONSTRAINT PK_UserQuotas PRIMARY KEY AUTOINCREMENT, ClientId INTEGER NOT NULL, UserName TEXT NOT NULL, MaxPages INTEGER NOT NULL, PagesUsed INTEGER NOT NULL, IsBlocked INTEGER NOT NULL, CONSTRAINT FK_UserQuotas_Clients_ClientId FOREIGN KEY (ClientId) REFERENCES Clients (Id) ON DELETE CASCADE)");
     } catch { }
+    try {
+        db.Database.ExecuteSqlRaw("ALTER TABLE Clients ADD COLUMN OfflineToleranceHours INTEGER NOT NULL DEFAULT 48");
+    } catch { }
+    try {
+        db.Database.ExecuteSqlRaw("ALTER TABLE Clients ADD COLUMN NetworkSubnets TEXT NOT NULL DEFAULT ''");
+        db.Database.ExecuteSqlRaw("ALTER TABLE Clients ADD COLUMN SnmpCommunity TEXT NOT NULL DEFAULT 'public'");
+        db.Database.ExecuteSqlRaw("ALTER TABLE Clients ADD COLUMN PollInterval INTEGER NOT NULL DEFAULT 15");
+    } catch { }
 }
 
 // Dicionários em memória (sem precisar de DB extra)
 ConcurrentDictionary<int, string> pendingCommands = new();
-ConcurrentDictionary<int, DateTime> agentHeartbeats = new();
+ConcurrentDictionary<int, ConcurrentDictionary<string, DateTime>> agentHeartbeats = new();
+
+
+ConcurrentDictionary<int, ConcurrentDictionary<string, AgentRoleConfig>> agentConfigs = new();
 
 // ==========================================
 // CLIENTES
@@ -50,7 +61,11 @@ app.MapGet("/api/clients", async (AppDbContext db) =>
     return Results.Ok(clients.Select(c => new {
         id = c.Id, name = c.Name, doc = c.ClientCode,
         email = c.Email, phone = c.Phone,
-        address = c.Address, plan = c.Plan
+        address = c.Address, plan = c.Plan,
+        offlineToleranceHours = c.OfflineToleranceHours,
+        networkSubnets = c.NetworkSubnets,
+        snmpCommunity = c.SnmpCommunity,
+        pollInterval = c.PollInterval
     }));
 });
 
@@ -66,8 +81,16 @@ app.MapPost("/api/clients", async (HttpRequest request, AppDbContext db) =>
     string phone   = doc.RootElement.TryGetProperty("phone",   out var ph) ? ph.GetString() ?? "" : "";
     string address = doc.RootElement.TryGetProperty("address", out var a)  ? a.GetString()  ?? "" : "";
     string plan    = doc.RootElement.TryGetProperty("plan",    out var pl) ? pl.GetString() ?? "basic" : "basic";
+    int tol        = doc.RootElement.TryGetProperty("offlineToleranceHours", out var tolP) ? tolP.GetInt32() : 48;
+    string subnets = doc.RootElement.TryGetProperty("networkSubnets", out var sub) ? sub.GetString() ?? "" : "";
+    string snmp    = doc.RootElement.TryGetProperty("snmpCommunity", out var snm) ? snm.GetString() ?? "public" : "public";
+    int poll       = doc.RootElement.TryGetProperty("pollInterval", out var pI) ? pI.GetInt32() : 15;
 
-    var client = new Client { Name = name, ClientCode = code, Email = email, Phone = phone, Address = address, Plan = plan };
+    var client = new Client { 
+        Name = name, ClientCode = code, Email = email, Phone = phone, 
+        Address = address, Plan = plan, OfflineToleranceHours = tol,
+        NetworkSubnets = subnets, SnmpCommunity = snmp, PollInterval = poll
+    };
     db.Clients.Add(client);
     await db.SaveChangesAsync();
     return Results.Ok(new { id = client.Id, message = "Cliente criado com sucesso!" });
@@ -88,6 +111,10 @@ app.MapPut("/api/clients/{id}", async (int id, HttpRequest request, AppDbContext
     if (doc.RootElement.TryGetProperty("phone",   out var pP))  client.Phone       = pP.GetString()  ?? client.Phone;
     if (doc.RootElement.TryGetProperty("address", out var aP))  client.Address     = aP.GetString()  ?? client.Address;
     if (doc.RootElement.TryGetProperty("plan",    out var plP)) client.Plan        = plP.GetString() ?? client.Plan;
+    if (doc.RootElement.TryGetProperty("offlineToleranceHours", out var tlP)) client.OfflineToleranceHours = tlP.GetInt32();
+    if (doc.RootElement.TryGetProperty("networkSubnets", out var subP)) client.NetworkSubnets = subP.GetString() ?? client.NetworkSubnets;
+    if (doc.RootElement.TryGetProperty("snmpCommunity", out var snmP)) client.SnmpCommunity = snmP.GetString() ?? client.SnmpCommunity;
+    if (doc.RootElement.TryGetProperty("pollInterval", out var pollP)) client.PollInterval = pollP.GetInt32();
 
     await db.SaveChangesAsync();
     return Results.Ok(new { message = "Atualizado" });
@@ -109,6 +136,37 @@ app.MapDelete("/api/clients/{id}", async (int id, AppDbContext db) =>
 // IMPRESSORAS
 // ==========================================
 
+app.MapGet("/api/printers/{id}", async (int id, AppDbContext db) =>
+{
+    var p = await db.Printers.Include(p => p.Client).FirstOrDefaultAsync(x => x.Id == id);
+    if (p == null) return Results.NotFound();
+    
+    var today = DateTime.UtcNow.Date;
+    var fourteenDaysAgo = today.AddDays(-13);
+    var pJobs = await db.PrintJobs.Where(j => j.PrinterId == p.Id && j.PrintedAt >= fourteenDaysAgo).ToListAsync();
+    
+    var historyArray = new int[14];
+    for (int i = 0; i < 14; i++)
+    {
+        var date = fourteenDaysAgo.AddDays(i);
+        historyArray[i] = pJobs.Where(j => j.PrintedAt.Date == date).Sum(j => j.TotalPages);
+    }
+    
+    return Results.Ok(new
+    {
+        id = p.Id,
+        clientId = p.ClientId,
+        clientName = p?.Client?.Name ?? "Desconhecido",
+        model = p?.Model,
+        ip = p?.IPAddress,
+        status = p?.Status,
+        toner = p?.TonerLevel,
+        drum = p?.DrumLevel,
+        isMonitored = p?.IsMonitored ?? false,
+        history = historyArray
+    });
+});
+
 app.MapGet("/api/printers", async (AppDbContext db) =>
 {
     var printers = await db.Printers.Include(p => p.Client).ToListAsync();
@@ -128,12 +186,19 @@ app.MapGet("/api/printers", async (AppDbContext db) =>
         }
         var pToday = pJobs.Where(j => j.PrintedAt.Date == today).Sum(j => j.TotalPages);
 
+        int tolHours = p.Client?.OfflineToleranceHours ?? 48;
+        string dynamicStatus = p.Status;
+        if (dynamicStatus == "online" && (DateTime.UtcNow - p.LastAccess).TotalHours >= tolHours)
+        {
+            dynamicStatus = "offline";
+        }
+
         resultList.Add(new {
             id = p.Id, clientId = p.ClientId,
             clientName = p.Client?.Name ?? "Desconhecido",
             model = p.Model, serial = p.SerialNumber,
             ip = p.IPAddress, firmware = p.Firmware,
-            status = p.Status,
+            status = dynamicStatus,
             pagesTotal = p.PagesTotal + pJobs.Sum(x => x.TotalPages),
             pagesToday = pToday > 0 ? pToday : p.PagesToday,
             lastAccess = p.LastAccess.ToString("dd/MM HH:mm"),
@@ -253,13 +318,14 @@ app.MapGet("/api/printjobs", async (AppDbContext db) =>
 
     return Results.Ok(jobs.Select(j => new {
         id = j.Id,
+        clientId = j.ClientId,
         clientName = j.Client?.Name ?? "Desconhecido",
         printerModel = j.Printer?.Model ?? "Desconhecida",
         printerIp = j.Printer?.IPAddress ?? "-",
         documentName = j.DocumentName,
         userName = j.UserName,
         totalPages = j.TotalPages,
-        printedAt = j.PrintedAt.ToString("dd/MM/yyyy HH:mm:ss")
+        printedAt = j.PrintedAt.ToString("o") // ISO 8601
     }));
 });
 
@@ -274,13 +340,14 @@ app.MapGet("/api/clients/{id}/jobs", async (int id, AppDbContext db) =>
 
     return Results.Ok(jobs.Select(j => new {
         id = j.Id,
+        clientId = j.ClientId,
         printerModel = j.Printer?.Model ?? "Desconhecida",
         printerIp = j.Printer?.IPAddress ?? "-",
         documentName = j.DocumentName,
         userName = j.UserName,
         userIp = j.UserIp,
         totalPages = j.TotalPages,
-        printedAt = j.PrintedAt.ToString("dd/MM/yyyy HH:mm:ss")
+        printedAt = j.PrintedAt.ToString("o")
     }));
 });
 
@@ -297,8 +364,12 @@ app.MapPost("/api/agent/heartbeat", async (HttpRequest request) =>
     if (doc.RootElement.TryGetProperty("ClientId", out var idProp))
     {
         int clientId = idProp.GetInt32();
-        agentHeartbeats[clientId] = DateTime.UtcNow;
-        Console.WriteLine($"[HEARTBEAT] Cliente {clientId} está online — {DateTime.UtcNow:HH:mm:ss}");
+        string hostname = doc.RootElement.TryGetProperty("Hostname", out var hProp) ? hProp.GetString() ?? "Unknown" : "Unknown";
+        
+        var hosts = agentHeartbeats.GetOrAdd(clientId, _ => new ConcurrentDictionary<string, DateTime>());
+        hosts[hostname] = DateTime.UtcNow;
+        
+        Console.WriteLine($"[HEARTBEAT] Cliente {clientId} ({hostname}) está online — {DateTime.UtcNow:HH:mm:ss}");
     }
     return Results.Ok();
 });
@@ -306,20 +377,32 @@ app.MapPost("/api/agent/heartbeat", async (HttpRequest request) =>
 // Status do agente por cliente
 app.MapGet("/api/agent/{clientId}/status", (int clientId) =>
 {
-    if (agentHeartbeats.TryGetValue(clientId, out DateTime lastSeen))
+    if (agentHeartbeats.TryGetValue(clientId, out var hosts))
     {
-        bool isOnline = (DateTime.UtcNow - lastSeen).TotalSeconds < 90; // 90s de tolerância
+        var cHosts = agentConfigs.GetOrAdd(clientId, _ => new());
+        var activeHosts = hosts.Select(kv => {
+            var cfg = cHosts.GetOrAdd(kv.Key, _ => new AgentRoleConfig());
+            return new {
+                hostname = kv.Key,
+                lastSeen = kv.Value.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                isOnline = (DateTime.UtcNow - kv.Value).TotalSeconds < 90,
+                isScannerEnabled = cfg.IsScannerEnabled,
+                isSpoolerEnabled = cfg.IsSpoolerEnabled
+            };
+        }).ToList();
+        
+        bool anyOnline = activeHosts.Any(h => h.isOnline);
         return Results.Ok(new {
-            isOnline,
-            lastSeen = lastSeen.ToString("dd/MM/yyyy HH:mm:ss"),
-            secondsAgo = (int)(DateTime.UtcNow - lastSeen).TotalSeconds
+            isOnline = anyOnline,
+            lastSeen = activeHosts.OrderByDescending(h => h.lastSeen).FirstOrDefault()?.lastSeen,
+            hosts = activeHosts
         });
     }
-    return Results.Ok(new { isOnline = false, lastSeen = (string?)null, secondsAgo = -1 });
+    return Results.Ok(new { isOnline = false, lastSeen = (string?)null, hosts = new object[]{} });
 });
 
 // Comandos pendentes para o agente
-app.MapGet("/api/agent/{clientId}/commands", (int clientId) =>
+app.MapGet("/api/agent/{clientId}/commands", (int clientId, HttpRequest req) =>
 {
     string cmd = "IDLE";
     if (pendingCommands.TryGetValue(clientId, out string? pendingCmd) && pendingCmd != null)
@@ -327,7 +410,38 @@ app.MapGet("/api/agent/{clientId}/commands", (int clientId) =>
         cmd = pendingCmd;
         pendingCommands.TryRemove(clientId, out _);
     }
-    return Results.Json(new { Command = cmd });
+
+    var cfg = new AgentRoleConfig();
+    string? hostname = req.Query["hostname"];
+    if (!string.IsNullOrEmpty(hostname))
+    {
+        var cHosts = agentConfigs.GetOrAdd(clientId, _ => new());
+        bool isFirst = cHosts.IsEmpty;
+        cfg = cHosts.GetOrAdd(hostname, _ => new AgentRoleConfig {
+            IsScannerEnabled = isFirst // O primeiro agente vira scanner por padrão
+        });
+    }
+
+    return Results.Json(new { 
+        Command = cmd,
+        IsScannerEnabled = cfg.IsScannerEnabled,
+        IsSpoolerEnabled = cfg.IsSpoolerEnabled
+    });
+});
+
+// Update agent config
+app.MapPut("/api/agent/{clientId}/{hostname}/config", async (int clientId, string hostname, HttpRequest request) => {
+    using var reader = new StreamReader(request.Body);
+    var body = await reader.ReadToEndAsync();
+    using JsonDocument doc = JsonDocument.Parse(body);
+    bool isScanner = doc.RootElement.GetProperty("isScannerEnabled").GetBoolean();
+    bool isSpooler = doc.RootElement.GetProperty("isSpoolerEnabled").GetBoolean();
+    
+    var configs = agentConfigs.GetOrAdd(clientId, _ => new());
+    var cfg = configs.GetOrAdd(hostname, _ => new AgentRoleConfig());
+    cfg.IsScannerEnabled = isScanner;
+    cfg.IsSpoolerEnabled = isSpooler;
+    return Results.Ok();
 });
 
 // Recebe relatório de impressoras descobertas pelo agente
@@ -339,6 +453,14 @@ app.MapPost("/api/agent/report-printers", async (HttpRequest request, AppDbConte
 
     int clientId = doc.RootElement.GetProperty("ClientId").GetInt32();
     var printersArr = doc.RootElement.GetProperty("Printers").EnumerateArray().ToList();
+
+    // Mark all existing printers for this client as offline. 
+    // They will be set back to online if they are found in the scan results.
+    var existingPrinters = await db.Printers.Where(x => x.ClientId == clientId).ToListAsync();
+    foreach(var ep in existingPrinters)
+    {
+        ep.Status = "offline";
+    }
 
     int newPrinters = 0;
     foreach (var p in printersArr)
@@ -468,23 +590,11 @@ app.MapGet("/api/agent/{clientId}/quotas", async (int clientId, AppDbContext db)
     return Results.Ok(quotas);
 });
 
-// ==========================================
-// MONITORAMENTO DE IMPRESSORAS
-// ==========================================
-app.MapPut("/api/printers/{id}/monitor", async (int id, HttpRequest request, AppDbContext db) =>
-{
-    var printer = await db.Printers.FindAsync(id);
-    if (printer == null) return Results.NotFound();
-    
-    using var reader = new StreamReader(request.Body);
-    var body = await reader.ReadToEndAsync();
-    using JsonDocument doc = JsonDocument.Parse(body);
-    if (doc.RootElement.TryGetProperty("isMonitored", out var monProp))
-    {
-        printer.IsMonitored = monProp.GetBoolean();
-        await db.SaveChangesAsync();
-    }
-    return Results.Ok();
-});
+
 
 app.Run("http://0.0.0.0:5000");
+
+public class AgentRoleConfig {
+    public bool IsScannerEnabled { get; set; } = false;
+    public bool IsSpoolerEnabled { get; set; } = true;
+}

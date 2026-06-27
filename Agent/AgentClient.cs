@@ -33,9 +33,6 @@ namespace Agent
         {
             LoadConfig();
 
-            // Inicia spooler monitor em background
-            SpoolerMonitor.StartBackground(OnPrintJobArrived);
-
             int heartbeatTick = 0;
             while (!ct.IsCancellationRequested)
             {
@@ -50,7 +47,7 @@ namespace Agent
                         await FetchQuotas();
 
                     // Verifica comandos pendentes
-                    var response = await _http.GetStringAsync($"{_serverUrl}/api/agent/{_clientId}/commands");
+                    var response = await _http.GetStringAsync($"{_serverUrl}/api/agent/{_clientId}/commands?hostname={Environment.MachineName}");
                     _serverReachable = true;
 
                     using JsonDocument doc = JsonDocument.Parse(response);
@@ -59,9 +56,21 @@ namespace Agent
                         command = cmdEl.GetString() ?? "";
                     else if (doc.RootElement.TryGetProperty("command", out JsonElement cmdElLower))
                         command = cmdElLower.GetString() ?? "";
+                        
+                    bool isScanner = false;
+                    bool isSpooler = true;
+                    if (doc.RootElement.TryGetProperty("IsScannerEnabled", out JsonElement scanEl)) isScanner = scanEl.GetBoolean();
+                    if (doc.RootElement.TryGetProperty("IsSpoolerEnabled", out JsonElement spoolEl)) isSpooler = spoolEl.GetBoolean();
+
+                    if (isSpooler && !SpoolerMonitor.IsRunning)
+                        SpoolerMonitor.StartBackground(OnPrintJobArrived);
+                    else if (!isSpooler && SpoolerMonitor.IsRunning)
+                        SpoolerMonitor.Stop();
 
                     if (command == "SCAN_NETWORK" || command.StartsWith("SCAN_IP:"))
                     {
+                        if (isScanner)
+                        {
                         string? customIp = command.StartsWith("SCAN_IP:") ? command.Substring("SCAN_IP:".Length).Trim() : null;
                         Console.WriteLine($"[Agente] Recebido {command} — iniciando varredura...");
                         var printers = NetworkScanner.RunScanner(customIp);
@@ -69,6 +78,11 @@ namespace Agent
                         string json = JsonSerializer.Serialize(new { ClientId = _clientId, Printers = printers });
                         await _http.PostAsync($"{_serverUrl}/api/agent/report-printers",
                             new StringContent(json, Encoding.UTF8, "application/json"));
+                        }
+                        else
+                        {
+                            Console.WriteLine($"[Agente] Comando {command} ignorado (Scanner desativado neste nó).");
+                        }
                     }
                     else if (command == "UNINSTALL")
                     {
@@ -98,7 +112,11 @@ namespace Agent
         {
             try
             {
-                string json = JsonSerializer.Serialize(new { ClientId = _clientId });
+                string json = JsonSerializer.Serialize(new { 
+                    ClientId = _clientId,
+                    Hostname = Environment.MachineName,
+                    Version = "v1.0"
+                });
                 await _http.PostAsync($"{_serverUrl}/api/agent/heartbeat",
                     new StringContent(json, Encoding.UTF8, "application/json"));
                 _serverReachable = true;
