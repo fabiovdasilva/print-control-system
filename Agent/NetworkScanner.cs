@@ -84,30 +84,14 @@ namespace Agent
             }
             } // fim else (modo automático)
 
+            ipsToScan = ipsToScan.Distinct(StringComparer.Ordinal).ToList();
             if (ipsToScan.Count == 0) return new List<PrinterInfo>();
 
-            var activeIps = new ConcurrentBag<string>();
             var printerList = new ConcurrentBag<PrinterInfo>();
 
-            // 1. Ping Sweep
-            Parallel.ForEach(ipsToScan, new ParallelOptions { MaxDegreeOfParallelism = 50 }, ip =>
-            {
-                try
-                {
-                    using (Ping pinger = new Ping())
-                    {
-                        PingReply reply = pinger.Send(ip, 500);
-                        if (reply.Status == IPStatus.Success)
-                        {
-                            activeIps.Add(ip);
-                        }
-                    }
-                }
-                catch { }
-            });
-
-            // 2. Interrogar via SNMP
-            Parallel.ForEach(activeIps, new ParallelOptions { MaxDegreeOfParallelism = 20 }, ip =>
+            // Consulta SNMP diretamente os endereços candidatos; impressoras podem bloquear ICMP.
+            // Interrogar via SNMP
+            Parallel.ForEach(ipsToScan, new ParallelOptions { MaxDegreeOfParallelism = 20 }, ip =>
             {
                 try
                 {
