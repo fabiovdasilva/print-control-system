@@ -26,3 +26,6 @@ ServerMock/printcontrol.db
 
 # Publicação local do agente (gerada pelo script)
 ServerMock/AgentPublish/
+
+# Local demonstration database
+ServerMock/demo-printcontrol.db*
