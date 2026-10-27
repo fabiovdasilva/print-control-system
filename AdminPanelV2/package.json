@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
+    "build:central": "vite build --config vite.central.config.ts",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",

@@ -44,6 +44,8 @@ if (string.IsNullOrWhiteSpace(adminApiKey))
 
 var app = builder.Build();
 app.UseCors("Dashboard");
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.Use(async (context, next) =>
 {
     var path = context.Request.Path.Value?.TrimEnd('/') ?? string.Empty;
@@ -87,6 +89,12 @@ app.Use(async (context, next) =>
             await context.Response.WriteAsJsonAsync(new { message = "Invalid agent credentials." });
             return;
         }
+    }
+    else if (!path.Equals("/api", StringComparison.OrdinalIgnoreCase) &&
+             !path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase))
+    {
+        await next();
+        return;
     }
     else
     {
@@ -837,6 +845,8 @@ static bool SecretsMatch(string provided, string expected)
 }
 
 var listenUrl = Environment.GetEnvironmentVariable("PRINT_CONTROL_LISTEN_URL") ?? "http://0.0.0.0:5000";
+app.MapFallback("/api/{**path}", () => Results.NotFound(new { message = "API endpoint not found." }));
+app.MapFallbackToFile("index.html");
 app.Run(listenUrl);
 
 public class AgentRoleConfig {

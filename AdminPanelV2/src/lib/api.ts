@@ -1,7 +1,9 @@
 export const API_BASE = import.meta.env.VITE_API_BASE
   ? import.meta.env.VITE_API_BASE.replace(/\/$/, "")
   : typeof window !== "undefined"
-    ? `http://${window.location.hostname}:5000/api`
+    ? import.meta.env.DEV
+      ? `http://${window.location.hostname}:5000/api`
+      : `${window.location.origin}/api`
     : "http://localhost:5000/api";
 
 export class ApiError extends Error {

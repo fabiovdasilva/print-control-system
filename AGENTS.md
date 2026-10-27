@@ -16,8 +16,8 @@ Superpowers skills are installed under `.agents/skills/` and UI UX Pro Max is in
 
 - `ServerMock/` is the ASP.NET Core API and local central service.
 - `Agent/` is the Windows client agent.
-- `AdminPanelV2/` is the active web dashboard launched by `Run_AdminPanel.bat`.
-- `AdminPanel/` is a legacy dashboard; do not add new features there unless explicitly requested.
+- `AdminPanelV2/` is the active web dashboard; `npm run build:central` emits the deployable bundle into `ServerMock/wwwroot/`.
+- `ServerMock/` serves both the web dashboard and the API from the same ASP.NET process on port 5000.
 
 ## Safety and versioning
 
