@@ -11,3 +11,15 @@ obj/
 
 # Logs
 *.log
+
+# Local secrets, runtime tools, generated dependencies, and operational print data
+.env
+.env.*
+!.env.example
+.dotnet/
+.pnpm-store/
+node_modules/
+printcontrol.db
+ServerMock/printcontrol.db
+*.db-shm
+*.db-wal
