@@ -1,3 +1,4 @@
+$ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
@@ -84,3 +85,4 @@ $form.Controls.Add($save)
 $form.AcceptButton = $save
 $form.Add_Shown({ $first.Focus() })
 [void]$form.ShowDialog()
+

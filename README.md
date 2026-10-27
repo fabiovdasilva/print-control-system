@@ -10,7 +10,7 @@ Protótipo funcional de monitoramento de impressoras em rede. A solução reúne
 
 ## Iniciar localmente no Windows
 
-1. Na primeira execução, abra Configurar_Senha_Admin.vbs e defina uma senha com pelo menos 12 caracteres.
+1. Na primeira execução, abra Configurar_Senha_Admin.bat e defina uma senha com pelo menos 12 caracteres.
 2. Abra Iniciar_Sistema_Servidor.bat. A central inicia em segundo plano, sem deixar uma janela de comando aberta.
 3. Acesse http://localhost:5000 e entre com a senha administrativa.
 4. Cadastre o cliente e defina as sub-redes em CIDR (por exemplo, 192.168.10.0/24) e a comunidade SNMP aceita pelas impressoras.
@@ -23,7 +23,7 @@ Para desenvolvimento da interface, instale Node.js com npm e, em AdminPanelV2, e
 
 ## Executar no servidor da rede
 
-No servidor 192.168.0.225, com o .NET 8 SDK instalado, configure a senha uma vez com Configurar_Senha_Admin.vbs e depois abra Iniciar_Sistema_Servidor.bat. A janela fecha logo após iniciar; a central segue em segundo plano. Para iniciar automaticamente quando o usuário do servidor entrar no Windows, abra Instalar_Inicializacao_Automatica.vbs uma vez.
+No servidor 192.168.0.225, com o .NET 8 SDK instalado, configure a senha uma vez com Configurar_Senha_Admin.bat e depois abra Iniciar_Sistema_Servidor.bat. A janela fecha logo após iniciar; a central segue em segundo plano. Para iniciar automaticamente quando o usuário do servidor entrar no Windows, abra Instalar_Inicializacao_Automatica.vbs uma vez.
 
 Acesse http://192.168.0.225:5000; painel e API são atendidos pelo mesmo processo, e os agentes enviam dados para /api nesse endereço. A porta 5001 do PrintControl existente permanece intacta. O banco, a senha em hash, a chave local da sessão e os logs ficam em %LOCALAPPDATA%\PrintFlow do usuário que executa a central. O acesso ainda usa HTTP; configure HTTPS antes de acessar por redes não confiáveis.
 
