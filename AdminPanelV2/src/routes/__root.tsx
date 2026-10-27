@@ -8,6 +8,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import React, { useEffect, type ReactNode } from "react";
+import { Eye, EyeOff } from "lucide-react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -141,6 +142,7 @@ function RootComponent() {
 
 function AdminPasswordGate({ children }: { children: ReactNode }) {
   const [password, setPassword] = React.useState("");
+  const [showPassword, setShowPassword] = React.useState(false);
   const [authenticated, setAuthenticated] = React.useState(false);
   const [checking, setChecking] = React.useState(true);
   const [submitting, setSubmitting] = React.useState(false);
@@ -190,15 +192,27 @@ function AdminPasswordGate({ children }: { children: ReactNode }) {
         <h1 className="text-xl font-semibold text-foreground">Acesso à central PrintFlow</h1>
         <p className="mt-2 text-sm text-muted-foreground">Entre com a senha administrativa configurada neste servidor.</p>
         <label htmlFor="admin-password" className="mt-6 block text-sm font-medium text-foreground">Senha administrativa</label>
-        <input
-          id="admin-password"
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-          required
-        />
+        <div className="relative mt-2">
+          <input
+            id="admin-password"
+            type={showPassword ? "text" : "password"}
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 pr-11 text-sm outline-none focus:ring-2 focus:ring-ring"
+            required
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((visible) => !visible)}
+            aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+            aria-pressed={showPassword}
+            className="absolute inset-y-0 right-0 grid w-11 place-items-center rounded-r-lg text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">A senha fica oculta enquanto você digita. Use o ícone para conferir.</p>
         {checking ? <p className="mt-3 text-sm text-muted-foreground">Verificando a sessão…</p> : null}
         {error ? <p role="alert" className="mt-3 text-sm text-danger">{error}</p> : null}
         <button type="submit" disabled={checking || submitting} className="mt-5 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60">
