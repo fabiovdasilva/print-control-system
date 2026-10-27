@@ -29,6 +29,7 @@ O script `Iniciar_Sistema.vbs` abre a central e o painel. Para desenvolvimento, 
 - `PRINT_CONTROL_DB_PATH`: caminho opcional do SQLite. Padrão: `ServerMock/printcontrol.db`.
 - `PRINT_CONTROL_AGENT_EXE`: caminho opcional do agente publicado. Padrão: `ServerMock/AgentPublish/Agent.exe`.
 - `PRINT_CONTROL_CORS_ORIGINS`: origens separadas por ponto e vírgula. Padrão: `http://localhost:5173;http://127.0.0.1:5173`.
+- `PRINT_CONTROL_LISTEN_URL`: endereço opcional da central. Padrão: `http://0.0.0.0:5000`; para teste apenas nesta máquina, use `http://127.0.0.1:5000`.
 - `VITE_API_BASE`: URL opcional da API para o painel. Por padrão, o painel usa o host atual na porta 5000.
 
 A central escuta na porta 5000. Para acesso de outras máquinas, configure HTTPS e firewall; não exponha o protótipo diretamente à internet.

@@ -836,7 +836,8 @@ static bool SecretsMatch(string provided, string expected)
     return CryptographicOperations.FixedTimeEquals(left, right);
 }
 
-app.Run("http://0.0.0.0:5000");
+var listenUrl = Environment.GetEnvironmentVariable("PRINT_CONTROL_LISTEN_URL") ?? "http://0.0.0.0:5000";
+app.Run(listenUrl);
 
 public class AgentRoleConfig {
     public bool IsScannerEnabled { get; set; } = false;
