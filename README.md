@@ -23,6 +23,7 @@ Para desenvolvimento da interface, instale Node.js com npm e, em AdminPanelV2, e
 No servidor `192.168.0.225`, com o .NET 8 SDK instalado, execute `Iniciar_Sistema_Servidor.bat`. Um processo ASP.NET serve a interface web e a API na porta `5000`. Acesse `http://192.168.0.225:5000`; os agentes também enviam dados para esse endereço, sob `/api`. O serviço existente na porta `5001` permanece intacto. Execute o inicializador na sessão do servidor: iniciá-lo no `DESKTOP-766` executa o processo nesse desktop, não no servidor de arquivos. O painel está incluído em `ServerMock/wwwroot`, então Node.js/npm não precisam estar instalados no servidor. Se alterar o painel, gere o bundle com `npm run build:central` na pasta `AdminPanelV2`.
 
 Abra `http://192.168.0.225:5000`. A central imprime a chave administrativa no console. A base SQLite fica em `%LOCALAPPDATA%\PrintFlow\printcontrol.db` do usuário que iniciou a central. Libere TCP `5000` no firewall apenas para as redes que precisam acessar o protótipo. O acesso ainda usa HTTP; configure HTTPS antes de uma implantação de produção.
+
 ## Configuração
 
 - `PRINT_CONTROL_ADMIN_KEY`: chave administrativa persistente. Se omitida, uma chave temporária aleatória é exibida no console a cada inicialização.
