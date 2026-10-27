@@ -1,5 +1,9 @@
-Set WshShell = CreateObject("WScript.Shell")
-' Inicia o Backend (Servidor C#) de forma oculta (0 = janela escondida)
-WshShell.Run "cmd /c cd /d C:\print_agent\ServerMock\bin\Debug\net8.0 && ServerMock.exe", 0, False
-' Inicia o Frontend (Painel React/Vite) de forma oculta
-WshShell.Run "cmd /c cd /d C:\print_agent\AdminPanelV2 && npm run dev", 0, False
+Option Explicit
+Dim fso, shell, root
+Set fso = CreateObject("Scripting.FileSystemObject")
+Set shell = CreateObject("WScript.Shell")
+root = fso.GetParentFolderName(WScript.ScriptFullName)
+' A central fica visível para mostrar a chave administrativa no primeiro início.
+shell.Run Chr(34) & root & "\Run_Server.bat" & Chr(34), 1, False
+' O painel roda em segundo plano; abra http://localhost:5173 no navegador.
+shell.Run Chr(34) & root & "\Run_AdminPanel.bat" & Chr(34), 0, False

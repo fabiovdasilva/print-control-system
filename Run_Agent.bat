@@ -1,7 +1,12 @@
 @echo off
-title Agente de Bilhetagem (Worker)
+setlocal
+cd /d "%~dp0"
+title PrintFlow - Agente local
 color 0A
-echo Iniciando o Agente de Bilhetagem...
-cd /d "C:\print_agent\Agent\bin\Debug\net8.0"
-Agent.exe
+echo Iniciando o agente em modo de desenvolvimento.
+echo Em clientes, use o instalador baixado pela tela do cliente.
+set "DOTNET_CMD=dotnet"
+where dotnet >nul 2>nul
+if errorlevel 1 if exist ".dotnet\dotnet.exe" set "DOTNET_CMD=%~dp0.dotnet\dotnet.exe"
+"%DOTNET_CMD%" run --project Agent\Agent.csproj
 pause
