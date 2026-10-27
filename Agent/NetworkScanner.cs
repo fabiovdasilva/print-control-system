@@ -130,7 +130,7 @@ namespace Agent
                             var info = new PrinterInfo { IP = ip, Model = modelName };
                             
                             // Função auxiliar para buscar OID individual sem quebrar a execução
-                            string GetOidSafe(string oid)
+                            string? GetOidSafe(string oid)
                             {
                                 try {
                                     var r = Messenger.Get(VersionCode.V1, endPoint, community, new List<Variable> { new Variable(new ObjectIdentifier(oid)) }, 1000);

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Agent
 {
@@ -18,6 +19,14 @@ namespace Agent
     {
         public List<string> ScannedIps { get; set; } = new();
         public List<PrinterInfo> Printers { get; set; } = new();
+
+        public NetworkScanResult() { }
+
+        public NetworkScanResult(List<string> scannedIps, List<PrinterInfo> printers)
+        {
+            ScannedIps = scannedIps;
+            Printers = printers;
+        }
     }
 
     public class AgentConfig
