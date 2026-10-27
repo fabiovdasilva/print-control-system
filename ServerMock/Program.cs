@@ -494,13 +494,25 @@ app.MapPost("/api/agent/report-printers", async (HttpRequest request, AppDbConte
 
     int clientId = doc.RootElement.GetProperty("ClientId").GetInt32();
     var printersArr = doc.RootElement.GetProperty("Printers").EnumerateArray().ToList();
-
-    // Mark all existing printers for this client as offline. 
-    // They will be set back to online if they are found in the scan results.
-    var existingPrinters = await db.Printers.Where(x => x.ClientId == clientId).ToListAsync();
-    foreach(var ep in existingPrinters)
+    var scannedIps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    if (doc.RootElement.TryGetProperty("ScannedIps", out var scannedIpsElement) && scannedIpsElement.ValueKind == JsonValueKind.Array)
     {
-        ep.Status = "offline";
+        foreach (var scannedIp in scannedIpsElement.EnumerateArray())
+        {
+            if (scannedIp.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(scannedIp.GetString()))
+                scannedIps.Add(scannedIp.GetString()!);
+        }
+    }
+    if (scannedIps.Count > 4096)
+        return Results.BadRequest(new { message = "Scan contains too many addresses." });
+
+    // Only mark printers in this scan's IP range offline. Legacy agents that do not
+    // send ScannedIps do not change offline state for printers outside the report.
+    var existingPrinters = await db.Printers.Where(x => x.ClientId == clientId).ToListAsync();
+    foreach (var ep in existingPrinters)
+    {
+        if (scannedIps.Contains(ep.IPAddress))
+            ep.Status = "offline";
     }
 
     int newPrinters = 0;

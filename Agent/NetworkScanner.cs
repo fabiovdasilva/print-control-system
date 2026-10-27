@@ -18,6 +18,11 @@ namespace Agent
         /// </summary>
         public static List<PrinterInfo> RunScanner(string? customIp = null)
         {
+            return RunScannerDetailed(customIp).Printers;
+        }
+
+        public static NetworkScanResult RunScannerDetailed(string? customIp = null)
+        {
             var ipsToScan = new List<string>();
 
             if (!string.IsNullOrWhiteSpace(customIp))
@@ -85,7 +90,7 @@ namespace Agent
             } // fim else (modo automático)
 
             ipsToScan = ipsToScan.Distinct(StringComparer.Ordinal).ToList();
-            if (ipsToScan.Count == 0) return new List<PrinterInfo>();
+            if (ipsToScan.Count == 0) return new NetworkScanResult(ipsToScan, new List<PrinterInfo>());
 
             var printerList = new ConcurrentBag<PrinterInfo>();
 
@@ -168,7 +173,7 @@ namespace Agent
                 catch { }
             });
 
-            return new List<PrinterInfo>(printerList);
+            return new NetworkScanResult(ipsToScan, new List<PrinterInfo>(printerList));
         }
 
         private static uint GetNetworkSize(IPAddress ipAddress, IPAddress subnetMask)

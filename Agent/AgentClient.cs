@@ -73,9 +73,9 @@ namespace Agent
                         {
                         string? customIp = command.StartsWith("SCAN_IP:") ? command.Substring("SCAN_IP:".Length).Trim() : null;
                         Console.WriteLine($"[Agente] Recebido {command} — iniciando varredura...");
-                        var printers = NetworkScanner.RunScanner(customIp);
-                        Console.WriteLine($"[Agente] {printers.Count} impressoras encontradas.");
-                        string json = JsonSerializer.Serialize(new { ClientId = _clientId, Printers = printers });
+                        var scan = NetworkScanner.RunScannerDetailed(customIp);
+                        Console.WriteLine($"[Agente] {scan.Printers.Count} impressoras encontradas em {scan.ScannedIps.Count} endereços consultados.");
+                        string json = JsonSerializer.Serialize(new { ClientId = _clientId, Printers = scan.Printers, ScannedIps = scan.ScannedIps });
                         await _http.PostAsync($"{_serverUrl}/api/agent/report-printers",
                             new StringContent(json, Encoding.UTF8, "application/json"));
                         }

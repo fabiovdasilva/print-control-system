@@ -14,6 +14,12 @@ namespace Agent
         public int? DrumLevel { get; set; } = null;
     }
 
+    public class NetworkScanResult
+    {
+        public List<string> ScannedIps { get; set; } = new();
+        public List<PrinterInfo> Printers { get; set; } = new();
+    }
+
     public class AgentConfig
     {
         public int ClientId { get; set; } = 1;
