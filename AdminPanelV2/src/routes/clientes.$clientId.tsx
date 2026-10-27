@@ -40,7 +40,8 @@ function Page() {
   
   const { data: dashboard, isLoading } = useQuery({
     queryKey: ['dashboard'],
-    queryFn: fetchDashboardTotals
+    queryFn: fetchDashboardTotals,
+    refetchInterval: 15000
   });
 
   if (isLoading || !dashboard) {

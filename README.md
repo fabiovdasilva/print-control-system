@@ -5,7 +5,7 @@ Protótipo funcional de monitoramento de impressoras em rede. A solução reúne
 ## Componentes
 
 - **Central** — ASP.NET Core 8 e SQLite. Recebe heartbeat, relatórios SNMP e eventos do spooler; mantém clientes, impressoras, trabalhos, cotas e comandos pendentes.
-- **Agente Windows** — coleta informações na rede local por SNMP e observa trabalhos do spooler. Cada instalador baixado é configurado para um cliente e recebe uma credencial própria.
+- **Agente Windows** — coleta informações na rede local por SNMP e observa trabalhos do spooler. Cada instalador baixado é configurado para um cliente e recebe uma credencial própria. O scanner principal faz uma leitura inicial e repete a varredura conforme o intervalo definido no cadastro.
 - **Painel** — React, Vite e TanStack Router, em `AdminPanelV2/`. As páginas administrativas consultam a API protegida.
 
 ## Iniciar localmente no Windows

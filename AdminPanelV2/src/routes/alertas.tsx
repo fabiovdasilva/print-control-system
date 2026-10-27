@@ -10,7 +10,11 @@ export const Route = createFileRoute("/alertas")({
 });
 
 function Page() {
-  const { data, isLoading, error, refetch } = useQuery({ queryKey: ["dashboard"], queryFn: fetchDashboardTotals });
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ["dashboard"],
+    queryFn: fetchDashboardTotals,
+    refetchInterval: 15_000,
+  });
   const alerts = (data?.printers ?? []).filter((printer: any) => printer.status !== "online" || (printer.toner != null && printer.toner <= 15)).map((printer: any) => ({
     printer,
     critical: printer.status !== "online",

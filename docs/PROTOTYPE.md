@@ -5,9 +5,9 @@
 1. O operador inicia a central e autentica no painel com chave administrativa.
 2. Cadastra um cliente, suas sub-redes, comunidade SNMP e intervalo de consulta.
 3. Publica e baixa um agente Windows configurado para o cliente.
-4. O agente envia heartbeat, consulta comandos e cotas, varre a rede configurada e envia resultados SNMP.
+4. O agente envia heartbeat, consulta comandos e cotas, faz uma leitura SNMP inicial e repete a varredura no intervalo configurado.
 5. A central registra ou atualiza impressoras e trabalhos; o painel mostra status, agentes, alertas derivados, relatórios e exportação CSV.
-6. Uma varredura solicitada pelo painel entra em fila persistente e é executada pelo agente conectado.
+6. Varreduras solicitadas pelo painel entram em fila persistente e são confirmadas após o agente enviar o relatório; comandos sem confirmação expiram e podem ser repetidos.
 
 ## Segurança implementada
 
@@ -20,7 +20,7 @@
 ## Limites conhecidos
 
 - O transporte de desenvolvimento ainda é HTTP. Antes de implantação, use TLS, rotação e armazenamento seguro de chaves, firewall e gestão operacional de segredos.
-- O status e os hosts conectados ficam em memória e são reiniciados com a central. Comandos ficam no SQLite, mas são marcados como entregues na leitura; falta confirmação de execução e reentrega confiável.
+- O status e os hosts conectados ficam em memória e são reiniciados com a central. Comandos têm lease de 60 segundos, confirmação e reentrega; falta persistir os heartbeats e expor histórico/resultado dos comandos no painel.
 - A inicialização usa EnsureCreated e ajustes SQL compatíveis com o banco atual. Faltam migrations versionadas e estratégia de backup/retention.
 - A descoberta SNMP depende de modelos, versões e OIDs. Validar em equipamentos reais, incluindo SNMP v3 e estados específicos de fabricantes.
 - A contagem de páginas e metadados do spooler variam por driver e política. Páginas coloridas e custo não são inferidos.

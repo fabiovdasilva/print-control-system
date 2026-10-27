@@ -20,7 +20,8 @@ function Page() {
   const [searchTerm, setSearchTerm] = useState("");
   const { data: dashboard, isLoading, error, refetch } = useQuery({
     queryKey: ['dashboard'],
-    queryFn: fetchDashboardTotals
+    queryFn: fetchDashboardTotals,
+    refetchInterval: 15000
   });
 
   if (isLoading) return <div className="p-8 flex justify-center items-center h-screen">Carregando impressoras…</div>;
