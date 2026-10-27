@@ -10,25 +10,28 @@ Protótipo funcional de monitoramento de impressoras em rede. A solução reúne
 
 ## Iniciar localmente no Windows
 
-1. Para executar o sistema completo, use o inicializador do servidor. Ele serve painel e API juntos na porta 5000. No primeiro início, copie a chave administrativa exibida no console.
-2. Acesse http://localhost:5000 e informe a chave.
-3. Cadastre o cliente e defina as sub-redes em CIDR (por exemplo, 192.168.10.0/24) e a comunidade SNMP aceita pelas impressoras.
-4. Publique o agente com o script scripts/publish-agent.ps1.
-5. Baixe o instalador pela página do cliente e execute-o em um Windows na rede do cliente. O agente inicia no tray e se registra na central.
+1. Na primeira execução, abra Configurar_Senha_Admin.vbs e defina uma senha com pelo menos 12 caracteres.
+2. Abra Iniciar_Sistema_Servidor.bat. A central inicia em segundo plano, sem deixar uma janela de comando aberta.
+3. Acesse http://localhost:5000 e entre com a senha administrativa.
+4. Cadastre o cliente e defina as sub-redes em CIDR (por exemplo, 192.168.10.0/24) e a comunidade SNMP aceita pelas impressoras.
+5. Publique o agente com scripts/publish-agent.ps1.
+6. Baixe o instalador pela página do cliente e execute-o em um Windows na rede do cliente.
 
-Para desenvolvimento da interface, instale Node.js com npm e, em AdminPanelV2, execute npm install e npm run dev. Iniciar_Sistema.vbs abre a central unificada. Parar_Sistema.bat encerra somente o serviço da porta 5000.
+Para iniciar automaticamente após o usuário entrar no Windows, abra Instalar_Inicializacao_Automatica.vbs uma vez. A central roda na sessão desse usuário; ao sair dela, o processo é encerrado. Parar_Sistema.bat fecha apenas a central PrintFlow na porta 5000. Os registros ficam em %LOCALAPPDATA%\PrintFlow.
+
+Para desenvolvimento da interface, instale Node.js com npm e, em AdminPanelV2, execute npm install e npm run dev.
 
 ## Executar no servidor da rede
 
-No servidor `192.168.0.225`, com o .NET 8 SDK instalado, execute `Iniciar_Sistema_Servidor.bat`. Um processo ASP.NET serve a interface web e a API na porta `5000`. Acesse `http://192.168.0.225:5000`; os agentes também enviam dados para esse endereço, sob `/api`. O serviço existente na porta `5001` permanece intacto. Execute o inicializador na sessão do servidor: iniciá-lo no `DESKTOP-766` executa o processo nesse desktop, não no servidor de arquivos. O painel está incluído em `ServerMock/wwwroot`, então Node.js/npm não precisam estar instalados no servidor. Se alterar o painel, gere o bundle com `npm run build:central` na pasta `AdminPanelV2`.
+No servidor 192.168.0.225, com o .NET 8 SDK instalado, configure a senha uma vez com Configurar_Senha_Admin.vbs e depois abra Iniciar_Sistema_Servidor.bat. A janela fecha logo após iniciar; a central segue em segundo plano. Para iniciar automaticamente quando o usuário do servidor entrar no Windows, abra Instalar_Inicializacao_Automatica.vbs uma vez.
 
-Abra `http://192.168.0.225:5000`. A central imprime a chave administrativa no console. A base SQLite fica em `%LOCALAPPDATA%\PrintFlow\printcontrol.db` do usuário que iniciou a central. Libere TCP `5000` no firewall apenas para as redes que precisam acessar o protótipo. O acesso ainda usa HTTP; configure HTTPS antes de uma implantação de produção.
+Acesse http://192.168.0.225:5000; painel e API são atendidos pelo mesmo processo, e os agentes enviam dados para /api nesse endereço. A porta 5001 do PrintControl existente permanece intacta. O banco, a senha em hash, a chave local da sessão e os logs ficam em %LOCALAPPDATA%\PrintFlow do usuário que executa a central. O acesso ainda usa HTTP; configure HTTPS antes de acessar por redes não confiáveis.
 
 ## Configuração
 
-- `PRINT_CONTROL_ADMIN_KEY`: chave administrativa persistente. Se omitida, uma chave temporária aleatória é exibida no console a cada inicialização.
 - `PRINT_CONTROL_DB_PATH`: caminho opcional do SQLite. Padrão: `ServerMock/printcontrol.db`.
 - `PRINT_CONTROL_AGENT_EXE`: caminho opcional do agente publicado. Padrão: `ServerMock/AgentPublish/Agent.exe`.
+- `PRINT_CONTROL_ADMIN_AUTH_FILE`: arquivo local com hash e salt da senha administrativa; padrão: `admin-auth.json` ao lado do banco.
 - `PRINT_CONTROL_CORS_ORIGINS`: origens de desenvolvimento separadas por ponto e vírgula. Em produção, painel e API usam a mesma origem.
 - `PRINT_CONTROL_LISTEN_URL`: endereço opcional da central. Padrão: `http://0.0.0.0:5000`; para teste apenas nesta máquina, use `http://127.0.0.1:5000`.
 - `VITE_API_BASE`: URL opcional da API para desenvolvimento. Em produção, o painel usa a mesma origem (`/api`).
@@ -37,7 +40,7 @@ A central escuta na porta 5000. Para acesso de outras máquinas, configure HTTPS
 
 ## Segurança e operação
 
-- Rotas administrativas exigem `X-Admin-Key`. Rotas do agente exigem ID do cliente e token individual; somente o hash do token fica no banco.
+- O painel usa senha administrativa com hash PBKDF2, sessão em cookie HttpOnly de 12 horas e bloqueio temporário após cinco tentativas inválidas. Rotas do agente exigem ID do cliente e token individual; somente o hash do token fica no banco.
 - Baixar outro instalador para o mesmo cliente revoga o token do agente anterior. Reinstale a versão mais recente.
 - Bancos SQLite, executáveis e segredos locais não devem ser versionados.
 - Veja [docs/PROTOTYPE.md](docs/PROTOTYPE.md) para limites conhecidos e próximos passos antes de produção.
@@ -47,7 +50,7 @@ A central escuta na porta 5000. Para acesso de outras máquinas, configure HTTPS
 ```
 Agent/                   agente Windows
 ServerMock/              central e API
-AdminPanelV2/             painel web ativo e sua fonte
+AdminPanelV2/             painel web ativo e sua fonte e sua fonte
 ServerMock/wwwroot/       painel compilado servido pela central
 scripts/publish-agent.ps1 publicação do agente
 .agents/skills/           skills de desenvolvimento instaladas

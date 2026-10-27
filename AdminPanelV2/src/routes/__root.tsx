@@ -130,72 +130,79 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AdminKeyGate>
+      <AdminPasswordGate>
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         <Outlet />
-      </AdminKeyGate>
+      </AdminPasswordGate>
       <Toaster position="top-right" richColors />
     </QueryClientProvider>
   );
 }
 
-function AdminKeyGate({ children }: { children: ReactNode }) {
-  const [key, setKey] = React.useState("");
-  const [input, setInput] = React.useState("");
-  const [ready, setReady] = React.useState(false);
+function AdminPasswordGate({ children }: { children: ReactNode }) {
+  const [password, setPassword] = React.useState("");
+  const [authenticated, setAuthenticated] = React.useState(false);
   const [checking, setChecking] = React.useState(true);
+  const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState("");
 
   React.useEffect(() => {
-    const saved = window.sessionStorage.getItem("printflow_admin_key");
-    if (!saved) {
-      setChecking(false);
-      return;
-    }
-    void validateKey(saved, false);
+    let active = true;
+    fetch(API_BASE + "/auth/session", { credentials: "include" })
+      .then((response) => response.json())
+      .then((result) => { if (active) setAuthenticated(Boolean(result.authenticated)); })
+      .catch(() => { if (active) setError("Não foi possível conectar à central."); })
+      .finally(() => { if (active) setChecking(false); });
+    return () => { active = false; };
   }, []);
 
-  async function validateKey(candidate: string, showError = true) {
-    setChecking(true);
+  async function login(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
     setError("");
     try {
-      const response = await fetch(`${API_BASE}/admin/health`, { headers: { "X-Admin-Key": candidate } });
-      if (!response.ok) throw new Error("Chave inválida ou central indisponível.");
-      window.sessionStorage.setItem("printflow_admin_key", candidate);
-      setKey(candidate);
-      setReady(true);
+      const response = await fetch(API_BASE + "/auth/login", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "Não foi possível entrar.");
+      setAuthenticated(true);
+      setPassword("");
     } catch (cause) {
-      window.sessionStorage.removeItem("printflow_admin_key");
-      setReady(false);
-      if (showError) setError(cause instanceof Error ? cause.message : "Não foi possível validar a chave.");
+      setError(cause instanceof Error ? cause.message : "Não foi possível entrar.");
     } finally {
-      setChecking(false);
+      setSubmitting(false);
     }
   }
 
-  if (ready && key) return <>{children}</>;
+  if (authenticated) return <>{children}</>;
+
   return (
     <main className="grid min-h-screen place-items-center bg-background px-4">
       <form
         className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-lg"
-        onSubmit={(event) => { event.preventDefault(); void validateKey(input.trim()); }}
+        onSubmit={(event) => { void login(event); }}
       >
         <div className="mb-5 grid size-11 place-items-center rounded-xl bg-primary text-lg font-bold text-primary-foreground">P</div>
         <h1 className="text-xl font-semibold text-foreground">Acesso à central PrintFlow</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Informe a chave administrativa exibida no console da central.</p>
-        <label htmlFor="admin-key" className="mt-6 block text-sm font-medium text-foreground">Chave administrativa</label>
+        <p className="mt-2 text-sm text-muted-foreground">Entre com a senha administrativa configurada neste servidor.</p>
+        <label htmlFor="admin-password" className="mt-6 block text-sm font-medium text-foreground">Senha administrativa</label>
         <input
-          id="admin-key"
+          id="admin-password"
           type="password"
           autoComplete="current-password"
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
           className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
           required
         />
+        {checking ? <p className="mt-3 text-sm text-muted-foreground">Verificando a sessão…</p> : null}
         {error ? <p role="alert" className="mt-3 text-sm text-danger">{error}</p> : null}
-        <button type="submit" disabled={checking} className="mt-5 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60">
-          {checking ? "Verificando…" : "Entrar"}
+        <button type="submit" disabled={checking || submitting} className="mt-5 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60">
+          {submitting ? "Entrando…" : "Entrar"}
         </button>
       </form>
     </main>

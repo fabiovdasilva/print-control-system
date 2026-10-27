@@ -25,7 +25,8 @@ builder.Services.AddCors(options =>
     options.AddPolicy("Dashboard",
         policy => policy.WithOrigins(dashboardOrigins)
             .AllowAnyMethod()
-            .WithHeaders("Content-Type", "X-Admin-Key", "X-Agent-Client", "X-Agent-Token"));
+            .AllowCredentials()
+            .WithHeaders("Content-Type", "X-Agent-Client", "X-Agent-Token"));
 });
 
 var databasePath = Environment.GetEnvironmentVariable("PRINT_CONTROL_DB_PATH")
@@ -34,13 +35,14 @@ var databasePath = Environment.GetEnvironmentVariable("PRINT_CONTROL_DB_PATH")
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite($"Data Source={databasePath}"));
 
-var adminApiKey = Environment.GetEnvironmentVariable("PRINT_CONTROL_ADMIN_KEY")
-    ?? builder.Configuration["Security:AdminApiKey"];
-if (string.IsNullOrWhiteSpace(adminApiKey))
-{
-    adminApiKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-    Console.WriteLine($"[SEGURANÇA] Chave administrativa temporária (configure PRINT_CONTROL_ADMIN_KEY para persistir): {adminApiKey}");
-}
+var authDirectory = Path.GetDirectoryName(Path.GetFullPath(databasePath))!;
+Directory.CreateDirectory(authDirectory);
+var adminCredentialFile = Environment.GetEnvironmentVariable("PRINT_CONTROL_ADMIN_AUTH_FILE")
+    ?? Path.Combine(authDirectory, "admin-auth.json");
+var sessionKeyFile = Path.Combine(authDirectory, "admin-session.key");
+var adminSessionKey = LoadOrCreateSessionKey(sessionKeyFile);
+const string adminSessionCookie = "PrintFlow.Admin";
+var failedAdminLogins = new ConcurrentDictionary<string, AdminLoginThrottle>();
 
 var app = builder.Build();
 app.UseCors("Dashboard");
@@ -49,7 +51,8 @@ app.UseStaticFiles();
 app.Use(async (context, next) =>
 {
     var path = context.Request.Path.Value?.TrimEnd('/') ?? string.Empty;
-    if (context.Request.Method == "OPTIONS" || path == "/api/health")
+    if (context.Request.Method == "OPTIONS" || path == "/api/health" ||
+        path == "/api/auth/login" || path == "/api/auth/session" || path == "/api/auth/logout")
     {
         await next();
         return;
@@ -98,11 +101,11 @@ app.Use(async (context, next) =>
     }
     else
     {
-        var providedKey = context.Request.Headers["X-Admin-Key"].ToString();
-        if (!SecretsMatch(providedKey, adminApiKey))
+        var sessionToken = context.Request.Cookies[adminSessionCookie];
+        if (!IsValidAdminSession(sessionToken, adminSessionKey))
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            await context.Response.WriteAsJsonAsync(new { message = "Admin key is required." });
+            await context.Response.WriteAsJsonAsync(new { message = "Faça login com a senha administrativa." });
             return;
         }
     }
@@ -149,6 +152,95 @@ AgentRoleConfig GetOrCreateAgentRoleConfig(int clientId, string hostname)
         return config;
     }
 }
+
+app.MapGet("/api/auth/session", (HttpContext context) =>
+    Results.Ok(new { authenticated = IsValidAdminSession(context.Request.Cookies[adminSessionCookie], adminSessionKey) }));
+
+app.MapPost("/api/auth/login", (HttpContext context, AdminLoginRequest request) =>
+{
+    if (!File.Exists(adminCredentialFile))
+        return Results.Json(new { message = "A senha administrativa ainda não foi configurada neste servidor." }, statusCode: StatusCodes.Status503ServiceUnavailable);
+
+    var remoteAddress = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+    var throttle = failedAdminLogins.GetOrAdd(remoteAddress, _ => new AdminLoginThrottle());
+    lock (throttle)
+    {
+        var now = DateTimeOffset.UtcNow;
+        if (throttle.BlockedUntil > now)
+        {
+            context.Response.Headers.RetryAfter = Math.Max(1, (int)(throttle.BlockedUntil - now).TotalSeconds).ToString();
+            return Results.Json(new { message = "Muitas tentativas. Aguarde 15 minutos e tente novamente." }, statusCode: StatusCodes.Status429TooManyRequests);
+        }
+        if (now - throttle.WindowStarted > TimeSpan.FromMinutes(15))
+        {
+            throttle.WindowStarted = now;
+            throttle.FailedAttempts = 0;
+        }
+    }
+
+    var credential = LoadAdminCredential(adminCredentialFile);
+    if (credential == null || !VerifyAdminPassword(request.Password ?? string.Empty, credential))
+    {
+        lock (throttle)
+        {
+            throttle.FailedAttempts++;
+            if (throttle.FailedAttempts >= 5)
+                throttle.BlockedUntil = DateTimeOffset.UtcNow.AddMinutes(15);
+        }
+        return Results.Json(new { message = "Senha incorreta." }, statusCode: StatusCodes.Status401Unauthorized);
+    }
+    failedAdminLogins.TryRemove(remoteAddress, out _);
+
+    var expiresAt = DateTimeOffset.UtcNow.AddHours(12);
+    var token = CreateAdminSession(adminSessionKey, expiresAt);
+    context.Response.Cookies.Append(adminSessionCookie, token, new CookieOptions
+    {
+        HttpOnly = true,
+        IsEssential = true,
+        Secure = context.Request.IsHttps,
+        SameSite = SameSiteMode.Strict,
+        Path = "/",
+        Expires = expiresAt
+    });
+    return Results.Ok(new { authenticated = true });
+});
+
+app.MapPost("/api/auth/logout", (HttpContext context) =>
+{
+    context.Response.Cookies.Delete(adminSessionCookie, new CookieOptions
+    {
+        HttpOnly = true,
+        IsEssential = true,
+        Secure = context.Request.IsHttps,
+        SameSite = SameSiteMode.Strict,
+        Path = "/"
+    });
+    return Results.Ok(new { authenticated = false });
+});
+
+app.MapPost("/api/auth/change-password", (HttpContext context, PasswordChangeRequest request) =>
+{
+    var credential = LoadAdminCredential(adminCredentialFile);
+    if (credential == null || !VerifyAdminPassword(request.CurrentPassword ?? string.Empty, credential))
+        return Results.Json(new { message = "A senha atual está incorreta." }, statusCode: StatusCodes.Status401Unauthorized);
+    if (string.IsNullOrWhiteSpace(request.NewPassword) || request.NewPassword.Length < 12)
+        return Results.BadRequest(new { message = "A nova senha precisa ter pelo menos 12 caracteres." });
+
+    SaveAdminCredential(adminCredentialFile, request.NewPassword);
+    var replacementKey = RandomNumberGenerator.GetBytes(32);
+    File.WriteAllBytes(sessionKeyFile, replacementKey);
+    CryptographicOperations.ZeroMemory(adminSessionKey);
+    Buffer.BlockCopy(replacementKey, 0, adminSessionKey, 0, replacementKey.Length);
+    context.Response.Cookies.Delete(adminSessionCookie, new CookieOptions
+    {
+        HttpOnly = true,
+        IsEssential = true,
+        Secure = context.Request.IsHttps,
+        SameSite = SameSiteMode.Strict,
+        Path = "/"
+    });
+    return Results.Ok(new { message = "Senha atualizada. Entre novamente com a nova senha." });
+});
 
 // ==========================================
 // CLIENTES
@@ -844,10 +936,141 @@ static bool SecretsMatch(string provided, string expected)
     return CryptographicOperations.FixedTimeEquals(left, right);
 }
 
+static byte[] LoadOrCreateSessionKey(string path)
+{
+    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+    try
+    {
+        using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        var key = RandomNumberGenerator.GetBytes(32);
+        stream.Write(key);
+        return key;
+    }
+    catch (IOException)
+    {
+        var existingKey = File.ReadAllBytes(path);
+        if (existingKey.Length != 32)
+            throw new InvalidDataException("The administrator session key must contain 32 bytes.");
+        return existingKey;
+    }
+}
+
+static string CreateAdminSession(byte[] key, DateTimeOffset expiresAt)
+{
+    var payload = expiresAt.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture)
+        + "." + Base64UrlEncode(RandomNumberGenerator.GetBytes(18));
+    var signature = HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(payload));
+    return payload + "." + Base64UrlEncode(signature);
+}
+
+static bool IsValidAdminSession(string? token, byte[] key)
+{
+    if (string.IsNullOrWhiteSpace(token)) return false;
+    var parts = token.Split('.');
+    if (parts.Length != 3 ||
+        !long.TryParse(parts[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var expiry))
+        return false;
+
+    var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+    if (expiry <= now || expiry > now + 12 * 60 * 60 + 60) return false;
+    try
+    {
+        var expected = HMACSHA256.HashData(key, Encoding.UTF8.GetBytes(parts[0] + "." + parts[1]));
+        var supplied = Base64UrlDecode(parts[2]);
+        return CryptographicOperations.FixedTimeEquals(expected, supplied);
+    }
+    catch (FormatException)
+    {
+        return false;
+    }
+}
+
+static string Base64UrlEncode(byte[] value) =>
+    Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+static byte[] Base64UrlDecode(string value)
+{
+    var normalized = value.Replace('-', '+').Replace('_', '/');
+    normalized += (normalized.Length % 4) switch { 2 => "==", 3 => "=", _ => string.Empty };
+    return Convert.FromBase64String(normalized);
+}
+
+static AdminCredential? LoadAdminCredential(string path)
+{
+    try
+    {
+        return File.Exists(path)
+            ? JsonSerializer.Deserialize<AdminCredential>(File.ReadAllText(path), new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+            : null;
+    }
+    catch
+    {
+        return null;
+    }
+}
+
+static bool VerifyAdminPassword(string password, AdminCredential credential)
+{
+    try
+    {
+        var salt = Convert.FromBase64String(credential.Salt);
+        var expected = Convert.FromBase64String(credential.PasswordHash);
+        if (credential.Iterations is < 100000 or > 1000000 || salt.Length != 16 || expected.Length != 32)
+            return false;
+        var actual = Rfc2898DeriveBytes.Pbkdf2(password, salt, credential.Iterations, HashAlgorithmName.SHA256, expected.Length);
+        return CryptographicOperations.FixedTimeEquals(actual, expected);
+    }
+    catch
+    {
+        return false;
+    }
+}
+
+static void SaveAdminCredential(string path, string password)
+{
+    const int iterations = 310000;
+    var salt = RandomNumberGenerator.GetBytes(16);
+    var credential = new AdminCredential
+    {
+        Salt = Convert.ToBase64String(salt),
+        Iterations = iterations
+    };
+    credential.PasswordHash = Convert.ToBase64String(Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, HashAlgorithmName.SHA256, 32));
+    var tempPath = path + ".tmp";
+    File.WriteAllText(tempPath, JsonSerializer.Serialize(credential));
+    File.Move(tempPath, path, true);
+}
+
+
 var listenUrl = Environment.GetEnvironmentVariable("PRINT_CONTROL_LISTEN_URL") ?? "http://0.0.0.0:5000";
 app.MapFallback("/api/{**path}", () => Results.NotFound(new { message = "API endpoint not found." }));
 app.MapFallbackToFile("index.html");
 app.Run(listenUrl);
+
+public sealed class AdminLoginThrottle
+{
+    public DateTimeOffset WindowStarted { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset BlockedUntil { get; set; }
+    public int FailedAttempts { get; set; }
+}
+
+public sealed class AdminCredential
+{
+    public string Salt { get; set; } = string.Empty;
+    public string PasswordHash { get; set; } = string.Empty;
+    public int Iterations { get; set; }
+}
+
+public sealed class AdminLoginRequest
+{
+    public string? Password { get; set; }
+}
+
+public sealed class PasswordChangeRequest
+{
+    public string? CurrentPassword { get; set; }
+    public string? NewPassword { get; set; }
+}
 
 public class AgentRoleConfig {
     public bool IsScannerEnabled { get; set; } = false;

@@ -17,11 +17,7 @@ export class ApiError extends Error {
 
 export async function adminFetch(input: string | URL, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
-  if (typeof window !== "undefined") {
-    const key = window.sessionStorage.getItem("printflow_admin_key");
-    if (key) headers.set("X-Admin-Key", key);
-  }
-  const response = await fetch(input, { ...init, headers });
+  const response = await fetch(input, { ...init, headers, credentials: "include" });
   if (!response.ok) {
     let message = `Falha na comunicação com a central (${response.status}).`;
     try {

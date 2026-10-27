@@ -30,3 +30,5 @@ ServerMock/AgentPublish/
 # Local demonstration database
 ServerMock/demo-printcontrol.db*
 AdminPanelV2/src/routeTree.central.gen.ts
+admin-auth.json
+admin-session.key

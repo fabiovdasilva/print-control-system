@@ -2,7 +2,7 @@
 
 ## Fluxo pronto
 
-1. O operador inicia a central e autentica no painel com chave administrativa.
+1. O operador inicia a central e entra no painel com senha administrativa.
 2. Cadastra um cliente, suas sub-redes, comunidade SNMP e intervalo de consulta.
 3. Publica e baixa um agente Windows configurado para o cliente.
 4. O agente envia heartbeat, consulta comandos e cotas, faz uma leitura SNMP inicial e repete a varredura no intervalo configurado.
@@ -11,7 +11,7 @@
 
 ## Segurança implementada
 
-- Chave administrativa nas rotas administrativas.
+- Senha administrativa armazenada como hash PBKDF2 com salt, sessão em cookie HttpOnly assinada localmente com validade de 12 horas e bloqueio temporário de tentativas repetidas.
 - Token aleatório individual por cliente, guardado como hash no banco e enviado pelo agente em cabeçalho separado.
 - Verificação da identidade do cliente nas chamadas do agente.
 - CORS restrito às origens configuradas.
@@ -24,8 +24,8 @@
 - A inicialização usa EnsureCreated e ajustes SQL compatíveis com o banco atual. Faltam migrations versionadas e estratégia de backup/retention.
 - A descoberta SNMP depende de modelos, versões e OIDs. Validar em equipamentos reais, incluindo SNMP v3 e estados específicos de fabricantes.
 - A contagem de páginas e metadados do spooler variam por driver e política. Páginas coloridas e custo não são inferidos.
-- O agente é um aplicativo Windows de tray que inicia na sessão do usuário; não é um serviço Windows gerenciado. Validar instalação, atualização e desinstalação nos clientes.
-- A chave administrativa compartilhada fornece autenticação simples; faltam usuários individuais, permissões por função, auditoria e isolamento multi-tenant forte.
+- O agente é um aplicativo Windows de tray que inicia na sessão do usuário; não é um serviço Windows gerenciado. A central também roda em segundo plano na sessão do usuário do servidor e encerra quando ele sai; falta convertê-la em serviço Windows para operar sem uma sessão aberta.
+- Há uma única senha administrativa para o painel; faltam usuários individuais, permissões por função, auditoria e isolamento multi-tenant forte.
 - O instalador não é assinado. Para distribuição ampla, assine os binários e use canal autenticado.
 - A validação local comprova comunicação e fila, mas não substitui testes com impressoras e drivers de cada fabricante.
 

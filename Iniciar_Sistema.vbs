@@ -1,7 +1,7 @@
 Option Explicit
-Dim fso, shell, root
+Dim fso, shell, root, command
 Set fso = CreateObject("Scripting.FileSystemObject")
 Set shell = CreateObject("WScript.Shell")
 root = fso.GetParentFolderName(WScript.ScriptFullName)
-' A central exibe a chave administrativa e serve o painel web na mesma porta.
-shell.Run Chr(34) & root & "\Iniciar_Sistema_Servidor.bat" & Chr(34), 1, False
+command = """" & shell.ExpandEnvironmentStrings("%SystemRoot%") & "\System32\WindowsPowerShell\v1.0\powershell.exe"" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File """ & root & "\scripts\Start-Central.ps1"""
+shell.Run command, 0, False
