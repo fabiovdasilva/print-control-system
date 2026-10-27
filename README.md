@@ -25,7 +25,7 @@ O script `Iniciar_Sistema.vbs` abre a central e o painel. Para desenvolvimento, 
 
 ## Executar no servidor da rede
 
-No servidor `192.168.0.225`, execute `Run_Server_Rede.bat` e `Run_Painel_Rede.bat` em janelas separadas. Os scripts iniciam a central em `0.0.0.0:5000` e o painel em `0.0.0.0:5173`; o serviço existente na porta `5001` permanece intacto. Execute-os na sessão do servidor: iniciá-los no `DESKTOP-766` executa os processos nesse desktop, não no servidor de arquivos.
+No servidor `192.168.0.225`, execute `Iniciar_Sistema_Servidor.bat`; ele abre a central e o painel em janelas separadas. Para iniciar cada parte isoladamente, use `Run_Server_Rede.bat` e `Run_Painel_Rede.bat`. Os scripts iniciam a central em `0.0.0.0:5000` e o painel em `0.0.0.0:5173`; o serviço existente na porta `5001` permanece intacto. Execute-os na sessão do servidor: iniciá-los no `DESKTOP-766` executa os processos nesse desktop, não no servidor de arquivos.
 
 Abra `http://192.168.0.225:5173`. A central imprime a chave administrativa no console. A base SQLite fica em `%LOCALAPPDATA%\PrintFlow\printcontrol.db` do usuário que iniciou a central. Libere TCP `5000` e `5173` no firewall apenas para as redes de clientes que precisam acessar o protótipo. O acesso ainda usa HTTP; configure HTTPS antes de uma implantação de produção.
 ## Configuração
