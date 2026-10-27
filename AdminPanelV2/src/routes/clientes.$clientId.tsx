@@ -6,13 +6,11 @@ import { VolumeChart } from "@/components/VolumeChart";
 import { AlertsList } from "@/components/AlertsList";
 import { StatusPill, TonerCMYK } from "@/components/StatusPill";
 
-import { fetchDashboardTotals, API_BASE } from "@/lib/api";
+import { fetchDashboardTotals, API_BASE, adminFetch, downloadAgent } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Building2, Cpu, Network, Save, Search, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Checkbox } from "@/components/ui/checkbox";
 
 const tabs = ["dashboard", "impressoras", "relatorios", "bilhetagem", "rede", "config"] as const;
 type Tab = (typeof tabs)[number];
@@ -62,14 +60,12 @@ function Page() {
     city: clientRaw.address || '-',
     printersOnline: printers.filter((p: any) => p.status === 'online').length,
     printersTotal: printers.length,
-    agentVersion: 'v1.0',
-    agentStatus: 'online', // placeholder
+    agentVersion: clientRaw.agent?.hosts?.[0]?.hostname || "—",
+    agentStatus: clientRaw.agent?.isOnline ? 'online' : 'offline',
     network: {
-      subnet: "192.168.1.0/24",
-      gateway: "192.168.1.1",
-      dns: "8.8.8.8",
-      snmpCommunity: "public",
-      pollIntervalSec: 60
+      subnet: clientRaw.networkSubnets || "",
+      snmpCommunity: clientRaw.snmpCommunity || "public",
+      pollIntervalSec: (clientRaw.pollInterval || 15) * 60
     }
   };
 
@@ -98,9 +94,9 @@ function Page() {
       }}
       actions={
         <div className="flex gap-2">
-           <a href={`${API_BASE}/clients/${client.id}/download-agent`} download className="rounded-lg border border-border px-4 py-1.5 text-sm font-medium hover:bg-muted bg-card">
-              Baixar Agente
-           </a>
+           <button onClick={() => downloadAgent(client.id).then(() => toast.success("Instalador gerado. A credencial anterior deste cliente foi substituída.")).catch((error) => toast.error(error instanceof Error ? error.message : "Falha ao gerar instalador."))} className="rounded-lg border border-border bg-card px-4 py-1.5 text-sm font-medium hover:bg-muted">
+              Baixar agente
+           </button>
         </div>
       }
     >
@@ -259,7 +255,7 @@ function ReportsTab({ client }: { client: any }) {
   const { data = [] } = useQuery({
     queryKey: ['printjobs'],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/printjobs`);
+      const res = await adminFetch(`${API_BASE}/printjobs`);
       return res.json();
     }
   });
@@ -267,17 +263,13 @@ function ReportsTab({ client }: { client: any }) {
 
   const relevantJobs = jobs.filter((j: any) => j.clientId === client.id);
   const totalPages = relevantJobs.reduce((acc: number, j: any) => acc + j.totalPages, 0);
-  
-  // As a mockup, let's say 27% are color pages since we don't have color tracking in PrintJob yet.
-  const colorPages = Math.round(totalPages * 0.27);
-  const cost = totalPages * 0.03;
 
   return (
     <>
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <KpiCard label="Páginas (Total Geral)" value={totalPages.toLocaleString("pt-BR")} hint="P&B + Color" />
-        <KpiCard label="Páginas Coloridas" value={colorPages.toLocaleString("pt-BR")} hint="Estimativa (27%)" accent="primary" />
-        <KpiCard label="Custo Estimado" value={`R$ ${cost.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} hint="R$ 0,03 / pág" accent="warning" />
+        <KpiCard label="Páginas registradas" value={totalPages.toLocaleString("pt-BR")} hint="Trabalhos recebidos dos agentes" />
+        <KpiCard label="Páginas coloridas" value="—" hint="Não informado pelo agente" accent="primary" />
+        <KpiCard label="Custo de impressão" value="—" hint="Configure o custo por página" accent="warning" />
       </div>
       <Panel title="Volume de Impressão (14 dias)">
         <VolumeChart height={320} clientId={client.id} />
@@ -291,7 +283,7 @@ function TicketingTab({ client, printers }: { client: any, printers: any[] }) {
   const { data: jobs = [] } = useQuery({
     queryKey: ['clientJobs', client.id],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/clients/${client.id}/jobs`);
+      const res = await adminFetch(`${API_BASE}/clients/${client.id}/jobs`);
       return res.json();
     }
   });
@@ -299,7 +291,7 @@ function TicketingTab({ client, printers }: { client: any, printers: any[] }) {
   const { data: quotas = [] } = useQuery({
     queryKey: ['clientQuotas', client.id],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/quotas/${client.id}`);
+      const res = await adminFetch(`${API_BASE}/quotas/${client.id}`);
       return res.json();
     }
   });
@@ -310,7 +302,7 @@ function TicketingTab({ client, printers }: { client: any, printers: any[] }) {
   const handleAddQuota = async () => {
     if (!newQuotaUser || !newQuotaMax) return;
     try {
-      const res = await fetch(`${API_BASE}/quotas`, {
+      const res = await adminFetch(`${API_BASE}/quotas`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -335,7 +327,7 @@ function TicketingTab({ client, printers }: { client: any, printers: any[] }) {
   const handleDeleteQuota = async (id: number) => {
     if (!confirm("Remover esta cota?")) return;
     try {
-      const res = await fetch(`${API_BASE}/quotas/${id}`, { method: 'DELETE' });
+      const res = await adminFetch(`${API_BASE}/quotas/${id}`, { method: 'DELETE' });
       if (res.ok) {
         queryClient.invalidateQueries({ queryKey: ['clientQuotas', client.id] });
       }
@@ -346,7 +338,7 @@ function TicketingTab({ client, printers }: { client: any, printers: any[] }) {
 
   const handleToggleBlock = async (quota: any) => {
     try {
-      await fetch(`${API_BASE}/quotas`, {
+      await adminFetch(`${API_BASE}/quotas`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -464,13 +456,11 @@ function NetworkTab({ client, clientRaw, printers }: { client: any, clientRaw: a
   const [snmp, setSnmp] = useState(clientRaw.snmpCommunity || "public");
   const [poll, setPoll] = useState(clientRaw.pollInterval?.toString() || "15");
   const [isScanning, setIsScanning] = useState(false);
-  const [scanResults, setScanResults] = useState<any[] | null>(null);
-  const [printerDecisions, setPrinterDecisions] = useState<Record<string, boolean>>({});
 
   const { data: agentStatus } = useQuery({
     queryKey: ['agentStatus', client.id],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/agent/${client.id}/status`);
+      const res = await adminFetch(`${API_BASE}/agent/${client.id}/status`);
       return res.json();
     },
     refetchInterval: 10000
@@ -482,7 +472,7 @@ function NetworkTab({ client, clientRaw, printers }: { client: any, clientRaw: a
 
   const handleToggleRole = async (hostname: string, isScanner: boolean, isSpooler: boolean) => {
     try {
-      await fetch(`${API_BASE}/agent/${client.id}/${hostname}/config`, {
+      await adminFetch(`${API_BASE}/agent/${client.id}/${hostname}/config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isScannerEnabled: isScanner, isSpoolerEnabled: isSpooler })
@@ -495,7 +485,7 @@ function NetworkTab({ client, clientRaw, printers }: { client: any, clientRaw: a
 
   const handleSave = async () => {
     try {
-      const res = await fetch(`${API_BASE}/clients/${client.id}`, {
+      const res = await adminFetch(`${API_BASE}/clients/${client.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -519,62 +509,17 @@ function NetworkTab({ client, clientRaw, printers }: { client: any, clientRaw: a
   const handleForceScan = async () => {
     setIsScanning(true);
     try {
-      const res = await fetch(`${API_BASE}/admin/force-scan/${client.id}`, { method: 'POST' });
-      if (res.ok) {
-         const data = await res.json();
-         setSubnets(data.network);
-         toast.success("Varredura concluída", {
-           description: "Rede detectada e impressoras encontradas."
-         });
-         
-         if (data.discovered && data.discovered.length > 0) {
-             setScanResults(data.discovered);
-             const initDecisions: Record<string, boolean> = {};
-             data.discovered.forEach((d: any) => initDecisions[d.ip] = true);
-             setPrinterDecisions(initDecisions);
-         } else {
-             toast.info("Nenhuma impressora nova encontrada na rede.");
-         }
-      } else {
-         toast.error("Erro ao solicitar varredura.");
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Erro na comunicação com o servidor.");
+      await adminFetch(`${API_BASE}/admin/force-scan/${client.id}`, { method: 'POST' });
+      toast.success("Varredura enfileirada", {
+        description: "O agente executará a leitura e atualizará as impressoras ao concluir."
+      });
+      window.setTimeout(() => void queryClient.invalidateQueries({ queryKey: ['dashboard'] }), 15000);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao solicitar varredura.");
     } finally {
       setIsScanning(false);
     }
   };
-
-  const handleApprove = async () => {
-    if (!scanResults) return;
-    
-    const payload = scanResults.map(p => ({
-        clientId: client.id,
-        ipAddress: p.ip,
-        model: p.model,
-        isMonitored: printerDecisions[p.ip]
-    }));
-    
-    try {
-        const res = await fetch(`${API_BASE}/printers/approve`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        if (res.ok) {
-            const data = await res.json();
-            toast.success("Impressoras salvas!", { description: data.message });
-            setScanResults(null);
-            queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-        } else {
-            toast.error("Erro ao salvar aprovação.");
-        }
-    } catch (err) {
-        toast.error("Erro de comunicação.");
-    }
-  };
-
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <Panel
@@ -681,7 +626,7 @@ function NetworkTab({ client, clientRaw, printers }: { client: any, clientRaw: a
             className="flex items-center gap-2 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isScanning ? <Loader2 className="size-4 animate-spin text-primary" /> : <Search className="size-4" />}
-            {isScanning ? "Aguardando agente..." : "Forçar Varredura"}
+            {isScanning ? "Enfileirando varredura..." : "Forçar Varredura"}
           </button>
           <button onClick={handleSave} className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
             <Save className="size-4" /> Salvar Rede
@@ -689,52 +634,6 @@ function NetworkTab({ client, clientRaw, printers }: { client: any, clientRaw: a
         </div>
       </Panel>
 
-      {scanResults && (
-        <Dialog open={true} onOpenChange={(open) => !open && setScanResults(null)}>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>Aprovação de Impressoras</DialogTitle>
-              <DialogDescription>
-                A varredura encontrou os seguintes dispositivos na rede <strong>{subnets}</strong>. Selecione quais você deseja monitorar.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col gap-3 py-4">
-               {scanResults.map((p, idx) => (
-                   <div key={idx} className="flex items-center space-x-3 rounded-lg border p-3">
-                       <Checkbox 
-                           id={`printer-${idx}`} 
-                           checked={printerDecisions[p.ip]}
-                           onCheckedChange={(c) => setPrinterDecisions(prev => ({...prev, [p.ip]: !!c}))}
-                       />
-                       <div className="flex-1">
-                           <label htmlFor={`printer-${idx}`} className="text-sm font-medium leading-none cursor-pointer">
-                               {p.ip}
-                           </label>
-                           <p className="text-xs text-muted-foreground mt-1">{p.model} ({p.mac})</p>
-                       </div>
-                       <div className="text-xs font-semibold">
-                           {printerDecisions[p.ip] ? <span className="text-emerald-500">Monitorar</span> : <span className="text-muted-foreground">Ocultar</span>}
-                       </div>
-                   </div>
-               ))}
-            </div>
-            <DialogFooter>
-              <button 
-                 onClick={() => setScanResults(null)}
-                 className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
-              >
-                 Cancelar
-              </button>
-              <button 
-                 onClick={handleApprove}
-                 className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-              >
-                 Salvar e Aplicar
-              </button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
     </div>
   );
 }
@@ -750,7 +649,7 @@ function ConfigTab({ client, clientRaw }: { client: any, clientRaw: any }) {
 
   const handleSave = async () => {
     try {
-      const res = await fetch(`${API_BASE}/clients/${client.id}`, {
+      const res = await adminFetch(`${API_BASE}/clients/${client.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -775,7 +674,7 @@ function ConfigTab({ client, clientRaw }: { client: any, clientRaw: any }) {
   const handleDelete = async () => {
     if (confirm("Tem certeza que deseja excluir esta empresa permanentemente? Todos os agentes e impressoras associados serão removidos do sistema.")) {
       try {
-        const res = await fetch(`${API_BASE}/clients/${client.id}`, { method: 'DELETE' });
+        const res = await adminFetch(`${API_BASE}/clients/${client.id}`, { method: 'DELETE' });
         if (res.ok) {
           alert("Empresa excluída com sucesso!");
           queryClient.invalidateQueries({ queryKey: ['dashboard'] });

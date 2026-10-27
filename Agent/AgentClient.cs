@@ -17,6 +17,7 @@ namespace Agent
         private static string _snmpCommunity = "public";
         private static string _networkSubnets = string.Empty;
         private static bool _serverReachable = false;
+        private static int _scanInProgress;
         public static List<UserQuota> CurrentQuotas { get; private set; } = new List<UserQuota>();
 
         public static string GetServerUrl() => _serverUrl;
@@ -31,7 +32,7 @@ namespace Agent
 
             try
             {
-                var scan = NetworkScanner.RunScannerDetailed(snmpCommunity: _snmpCommunity, networkSubnets: _networkSubnets);
+                var scan = await Task.Run(() => NetworkScanner.RunScannerDetailed(snmpCommunity: _snmpCommunity, networkSubnets: _networkSubnets));
                 await ReportPrinters(scan);
             }
             catch (Exception ex)
@@ -58,7 +59,7 @@ namespace Agent
                     // Heartbeat a cada 30s (6 ticks de 5s)
                     if (heartbeatTick % 6 == 0)
                         await SendHeartbeat();
-                        
+
                     // Atualiza Cotas a cada 60s (12 ticks) ou no primeiro tick
                     if (heartbeatTick % 12 == 0)
                         await FetchQuotas();
@@ -73,7 +74,7 @@ namespace Agent
                         command = cmdEl.GetString() ?? "";
                     else if (doc.RootElement.TryGetProperty("command", out JsonElement cmdElLower))
                         command = cmdElLower.GetString() ?? "";
-                        
+
                     bool isScanner = false;
                     bool isSpooler = true;
                     if (doc.RootElement.TryGetProperty("IsScannerEnabled", out JsonElement scanEl)) isScanner = scanEl.GetBoolean();
@@ -94,9 +95,30 @@ namespace Agent
                         {
                         string? customIp = command.StartsWith("SCAN_IP:") ? command.Substring("SCAN_IP:".Length).Trim() : null;
                         Console.WriteLine($"[Agente] Recebido {command} — iniciando varredura...");
-                        var scan = NetworkScanner.RunScannerDetailed(customIp, _snmpCommunity, _networkSubnets);
-                        Console.WriteLine($"[Agente] {scan.Printers.Count} impressoras encontradas em {scan.ScannedIps.Count} endereços consultados.");
-                        await ReportPrinters(scan);
+                        if (Interlocked.CompareExchange(ref _scanInProgress, 1, 0) == 0)
+                        {
+                            _ = Task.Run(async () =>
+                            {
+                                try
+                                {
+                                    var scan = NetworkScanner.RunScannerDetailed(customIp, _snmpCommunity, _networkSubnets);
+                                    Console.WriteLine($"[Agente] {scan.Printers.Count} impressoras encontradas em {scan.ScannedIps.Count} endereços consultados.");
+                                    await ReportPrinters(scan);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"[Agente] Falha na varredura: {ex.Message}");
+                                }
+                                finally
+                                {
+                                    Volatile.Write(ref _scanInProgress, 0);
+                                }
+                            });
+                        }
+                        else
+                        {
+                            Console.WriteLine("[Agente] Varredura ignorada: outra varredura ainda está em execução.");
+                        }
                         }
                         else
                         {
@@ -131,13 +153,14 @@ namespace Agent
         {
             try
             {
-                string json = JsonSerializer.Serialize(new { 
+                string json = JsonSerializer.Serialize(new {
                     ClientId = _clientId,
                     Hostname = Environment.MachineName,
                     Version = "v1.0"
                 });
-                await _http.PostAsync($"{_serverUrl}/api/agent/heartbeat",
+                using var response = await _http.PostAsync($"{_serverUrl}/api/agent/heartbeat",
                     new StringContent(json, Encoding.UTF8, "application/json"));
+                response.EnsureSuccessStatusCode();
                 _serverReachable = true;
             }
             catch

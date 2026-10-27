@@ -111,11 +111,9 @@ using (var scope = app.Services.CreateScope())
     try {
         db.Database.ExecuteSqlRaw("ALTER TABLE Clients ADD COLUMN OfflineToleranceHours INTEGER NOT NULL DEFAULT 48");
     } catch { }
-    try {
-        db.Database.ExecuteSqlRaw("ALTER TABLE Clients ADD COLUMN NetworkSubnets TEXT NOT NULL DEFAULT ''");
-        db.Database.ExecuteSqlRaw("ALTER TABLE Clients ADD COLUMN SnmpCommunity TEXT NOT NULL DEFAULT 'public'");
-        db.Database.ExecuteSqlRaw("ALTER TABLE Clients ADD COLUMN PollInterval INTEGER NOT NULL DEFAULT 15");
-    } catch { }
+    try { db.Database.ExecuteSqlRaw("ALTER TABLE Clients ADD COLUMN NetworkSubnets TEXT NOT NULL DEFAULT ''"); } catch { }
+    try { db.Database.ExecuteSqlRaw("ALTER TABLE Clients ADD COLUMN SnmpCommunity TEXT NOT NULL DEFAULT 'public'"); } catch { }
+    try { db.Database.ExecuteSqlRaw("ALTER TABLE Clients ADD COLUMN PollInterval INTEGER NOT NULL DEFAULT 15"); } catch { }
     try { db.Database.ExecuteSqlRaw("ALTER TABLE Clients ADD COLUMN AgentTokenHash TEXT NULL"); } catch { }
     db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS PendingAgentCommands (Id INTEGER NOT NULL CONSTRAINT PK_PendingAgentCommands PRIMARY KEY AUTOINCREMENT, ClientId INTEGER NOT NULL, Command TEXT NOT NULL, Hostname TEXT NULL, CreatedAt TEXT NOT NULL, DeliveredAt TEXT NULL)");
 }
@@ -276,7 +274,7 @@ app.MapGet("/api/printers", async (AppDbContext db) =>
             status = dynamicStatus,
             pagesTotal = p.PagesTotal + pJobs.Sum(x => x.TotalPages),
             pagesToday = pToday > 0 ? pToday : p.PagesToday,
-            lastAccess = p.LastAccess.ToString("dd/MM HH:mm"),
+            lastAccess = p.LastAccess.ToString("o"),
             toner = p.TonerLevel, drum = p.DrumLevel,
             location = p.Location, history = historyArray,
             isMonitored = p.IsMonitored
@@ -491,6 +489,31 @@ app.MapPost("/api/agent/heartbeat", async (HttpRequest request) =>
         Console.WriteLine($"[HEARTBEAT] Cliente {clientId} ({hostname}) está online — {DateTime.UtcNow:HH:mm:ss}");
     }
     return Results.Ok();
+});
+
+app.MapGet("/api/agents", async (AppDbContext db) =>
+{
+    var clients = await db.Clients.OrderBy(c => c.Name).ToListAsync();
+    var result = new List<object>();
+    foreach (var client in clients)
+    {
+        var hosts = new List<object>();
+        bool isOnline = false;
+        string? lastSeen = null;
+        if (agentHeartbeats.TryGetValue(client.Id, out var snapshots))
+        {
+            var ordered = snapshots.OrderByDescending(entry => entry.Value).ToList();
+            lastSeen = ordered.FirstOrDefault().Value.ToString("o");
+            foreach (var entry in ordered)
+            {
+                bool hostOnline = (DateTime.UtcNow - entry.Value).TotalSeconds < 90;
+                isOnline |= hostOnline;
+                hosts.Add(new { hostname = entry.Key, lastSeen = entry.Value.ToString("o"), isOnline = hostOnline });
+            }
+        }
+        result.Add(new { clientId = client.Id, clientName = client.Name, networkSubnets = client.NetworkSubnets, isOnline, lastSeen, hosts });
+    }
+    return Results.Ok(result);
 });
 
 // Status do agente por cliente

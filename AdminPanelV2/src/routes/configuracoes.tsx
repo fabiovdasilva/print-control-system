@@ -1,102 +1,44 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppLayout, PageTitle, Panel } from "@/components/AppLayout";
-import { Save } from "lucide-react";
+import { API_BASE } from "@/lib/api";
+import { useState } from "react";
+import { toast } from "sonner";
+import { KeyRound, Server, ShieldCheck } from "lucide-react";
 
 export const Route = createFileRoute("/configuracoes")({
-  head: () => ({
-    meta: [
-      { title: "Configurações — PrintFlow" },
-      { name: "description", content: "Configurações gerais da plataforma." },
-    ],
-  }),
+  head: () => ({ meta: [{ title: "Configurações — PrintFlow" }, { name: "description", content: "Configuração da central e acesso administrativo." }] }),
   component: Page,
 });
 
 function Page() {
+  const [confirmChange, setConfirmChange] = useState(false);
+  const apiUrl = API_BASE;
+  const configured = typeof window !== "undefined" && Boolean(window.sessionStorage.getItem("printflow_admin_key"));
+
+  function changeKey() {
+    window.sessionStorage.removeItem("printflow_admin_key");
+    toast.info("Informe a nova chave administrativa.");
+    window.location.reload();
+  }
+
   return (
     <AppLayout breadcrumbs={[{ label: "Configurações" }]}>
-      <PageTitle title="Configurações" subtitle="Preferências globais da plataforma." />
-
+      <PageTitle title="Configuração da central" subtitle="Estado de conexão e segurança deste painel." />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Panel title="Organização">
-          <div className="space-y-4">
-            <Field label="Nome da operação" value="PrintFlow Operação Central" />
-            <Field label="Fuso horário" value="America/Sao_Paulo" />
-            <Field label="Email do administrador" value="admin@printflow.com.br" />
-          </div>
+        <Panel title="Central de monitoramento">
+          <div className="flex items-start gap-4"><div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><Server className="size-5" /></div><div className="min-w-0"><p className="font-medium">API configurada</p><code className="mt-2 block break-all rounded-md bg-muted px-3 py-2 text-xs">{apiUrl}</code><p className="mt-3 text-sm text-muted-foreground">A URL pode ser alterada com <code>VITE_API_BASE</code> no ambiente do painel.</p></div></div>
         </Panel>
-
-        <Panel title="Políticas de Alerta">
-          <div className="space-y-4">
-            <Field label="Toner crítico (%)" value="10" />
-            <Field label="Toner aviso (%)" value="20" />
-            <Field label="Timeout offline (min)" value="5" />
-          </div>
+        <Panel title="Acesso administrativo">
+          <div className="flex items-start gap-4"><div className="grid size-10 shrink-0 place-items-center rounded-xl bg-success-soft text-success"><ShieldCheck className="size-5" /></div><div><p className="font-medium">{configured ? "Sessão autenticada" : "Sessão sem chave"}</p><p className="mt-1 text-sm text-muted-foreground">A chave fica somente nesta sessão do navegador. A central compara a chave em cada chamada administrativa.</p><button onClick={() => setConfirmChange(true)} className="mt-4 inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted"><KeyRound className="size-4" />Trocar chave</button></div></div>
         </Panel>
-
-        <Panel title="Notificações">
-          <div className="space-y-3 text-sm">
-            <Toggle label="Email em alertas críticos" enabled />
-            <Toggle label="Webhook para integração externa" enabled />
-            <Toggle label="Resumo diário às 08:00" enabled={false} />
-            <Toggle label="Notificar agentes offline" enabled />
-          </div>
+        <Panel title="Configuração do servidor">
+          <div className="space-y-3 text-sm text-muted-foreground"><p>Defina <code>PRINT_CONTROL_ADMIN_KEY</code> para manter a chave administrativa entre reinicializações.</p><p>Sem essa variável, a central gera uma chave temporária e a mostra no console na inicialização.</p><p>O download de um novo instalador substitui o token do agente daquele cliente; reinstale o arquivo baixado para restabelecer o heartbeat.</p></div>
         </Panel>
-
-        <Panel title="API & Integrações">
-          <div className="space-y-4">
-            <Field label="API Key" value="pf_live_••••••••••a91" />
-            <Field label="Webhook URL" value="https://example.com/hooks/printflow" />
-          </div>
-          <div className="mt-4 flex gap-2">
-            <button className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted">
-              Regerar chave
-            </button>
-            <button className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted">
-              Testar webhook
-            </button>
-          </div>
+        <Panel title="Limites do protótipo">
+          <div className="space-y-3 text-sm text-muted-foreground"><p>Os alertas atuais usam offline e toner igual ou abaixo de 15%.</p><p>Relatórios exibem somente trabalhos que o agente recebeu e conseguiu enviar à central.</p><p>Configure HTTPS e uma política de backup antes de usar dados reais em rede externa.</p></div>
         </Panel>
       </div>
-
-      <div className="mt-6 flex justify-end">
-        <button className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-          <Save className="size-4" /> Salvar tudo
-        </button>
-      </div>
+      {confirmChange ? <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setConfirmChange(false); }}><div role="dialog" aria-modal="true" className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl"><h2 className="font-semibold">Trocar chave administrativa?</h2><p className="mt-2 text-sm text-muted-foreground">A sessão atual será encerrada. A próxima tela pedirá a nova chave.</p><div className="mt-5 flex justify-end gap-2"><button onClick={() => setConfirmChange(false)} className="rounded-lg border border-border px-3 py-2 text-sm">Cancelar</button><button onClick={changeKey} className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">Encerrar sessão</button></div></div></div> : null}
     </AppLayout>
-  );
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        {label}
-      </span>
-      <input
-        defaultValue={value}
-        className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
-      />
-    </label>
-  );
-}
-
-function Toggle({ label, enabled }: { label: string; enabled: boolean }) {
-  return (
-    <label className="flex cursor-pointer items-center justify-between rounded-md border border-border bg-card px-4 py-3">
-      <span>{label}</span>
-      <span
-        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-          enabled ? "bg-primary" : "bg-muted"
-        }`}
-      >
-        <span
-          className={`inline-block size-4 transform rounded-full bg-white shadow transition-transform ${
-            enabled ? "translate-x-4" : "translate-x-0.5"
-          }`}
-        />
-      </span>
-    </label>
   );
 }

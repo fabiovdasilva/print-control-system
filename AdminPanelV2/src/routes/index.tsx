@@ -17,25 +17,24 @@ export const Route = createFileRoute("/")({
 });
 
 function Page() {
-  const { data: dashboard, isLoading } = useQuery({
+  const { data: dashboard, isLoading, error, refetch } = useQuery({
     queryKey: ['dashboard'],
     queryFn: fetchDashboardTotals
   });
 
-  if (isLoading || !dashboard) {
-    return <div className="p-8 flex justify-center items-center h-screen">Carregando dados reais...</div>;
-  }
+  if (isLoading) return <div className="p-8 flex justify-center items-center h-screen">Carregando dados da central…</div>;
+  if (error) return <AppLayout breadcrumbs={[{ label: "Dashboard Geral" }]}><div role="alert" className="rounded-lg border border-danger/30 bg-danger-soft p-5 text-sm text-danger">{error instanceof Error ? error.message : "Falha ao consultar a central."}<button className="ml-3 underline" onClick={() => void refetch()}>Tentar novamente</button></div></AppLayout>;
+  if (!dashboard) return null;
 
-  const { clients, printers, totals } = dashboard;
+  const { clients, printers, totals, agents } = dashboard;
   const offline = totals.printers - totals.online;
-  // TODO: agentStatus requires a check if agent is reachable, let's assume online for now or map properly.
+  const activeAgents = agents.filter((agent: any) => agent.isOnline).length;
   const activeClients = clients.length;
 
   // Adapt the backend client objects to match UI expectations
   const uiClients = clients.map((c: any) => {
     const cPrinters = printers.filter((p: any) => p.clientId === c.id);
     const cOnlinePrinters = cPrinters.filter((p: any) => p.status === 'online').length;
-    // mock some fields that might be missing in backend for display
     return {
       id: c.id,
       name: c.name,
@@ -43,8 +42,8 @@ function Page() {
       city: c.address || '-',
       printersOnline: cOnlinePrinters,
       printersTotal: cPrinters.length,
-      agentStatus: 'online', // assume online for mock UI representation
-      pagesToday: cPrinters.reduce((acc: number, p: any) => acc + (p.pagesToday || 0), 0),
+      agentStatus: c.agent?.isOnline ? 'online' : 'offline',
+pagesToday: cPrinters.reduce((acc: number, p: any) => acc + (p.pagesToday || 0), 0),
       alertsCritical: cPrinters.filter((p: any) => p.status === 'offline' || (p.toner !== null && p.toner < 15)).length
     };
   });
@@ -64,7 +63,7 @@ function Page() {
   return (
     <AppLayout
       breadcrumbs={[{ label: "Dashboard Geral" }]}
-      agentStatus={{ label: `${uiClients.length} clientes registrados`, status: "online" }}
+      agentStatus={{ label: `${activeAgents} agente${activeAgents === 1 ? "" : "s"} online`, status: activeAgents > 0 ? "online" : "offline" }}
     >
       <PageTitle
         title="Dashboard Geral"
@@ -72,7 +71,7 @@ function Page() {
       />
 
       <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard label="Clientes Ativos" value={activeClients} hint="Empresas" />
+        <KpiCard label="Clientes cadastrados" value={activeClients} hint="Empresas" />
         <KpiCard
           label="Impressoras Online"
           value={`${totals.online}/${totals.printers}`}
@@ -86,12 +85,7 @@ function Page() {
       <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Panel
           title="Volume Consolidado de Impressão"
-          right={
-            <div className="flex gap-2">
-              <button className="rounded-md bg-muted px-3 py-1 text-xs">Diário</button>
-              <button className="rounded-md bg-primary px-3 py-1 text-xs text-primary-foreground">Semanal</button>
-            </div>
-          }
+          right={<span className="text-xs text-muted-foreground">Últimos 14 dias · trabalhos registrados</span>}
           className="lg:col-span-2"
         >
           <VolumeChart />
@@ -149,12 +143,12 @@ function Page() {
                   </td>
                   <td className="px-6 py-4">
                     <span
-                      className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-success-soft text-success`}
+                      className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${c.agentStatus === 'online' ? 'bg-success-soft text-success' : 'bg-muted text-muted-foreground'}`}
                     >
                       <span
-                        className={`size-1.5 rounded-full bg-success`}
+                        className={`size-1.5 rounded-full ${c.agentStatus === 'online' ? 'bg-success' : 'bg-muted-foreground'}`}
                       />
-                      Online
+                      {c.agentStatus === 'online' ? "Online" : "Offline"}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm tabular-nums">{c.pagesToday.toLocaleString("pt-BR")}</td>

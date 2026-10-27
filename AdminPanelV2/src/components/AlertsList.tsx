@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import type { Alert } from "@/lib/mock-data";
+export type Alert = { id: number | string; severity: "error" | "warning" | "info"; title: string; description: string; time: string; ago: string };
 
 const sevStyle: Record<Alert["severity"], { bg: string; dot: string; title: string; desc: string }> = {
   error: { bg: "bg-danger-soft/60", dot: "bg-danger", title: "text-danger", desc: "text-danger/80" },

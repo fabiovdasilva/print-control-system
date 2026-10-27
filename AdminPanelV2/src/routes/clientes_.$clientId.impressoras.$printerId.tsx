@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useParams } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { API_BASE } from '@/lib/api';
+import { API_BASE, adminFetch } from '@/lib/api';
 import { AppLayout } from '@/components/AppLayout';
 import { Printer as PrinterIcon, ArrowLeft, BarChart3, Settings, Play, Pause, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -29,7 +29,7 @@ export default function PrinterDetailsPage() {
   const { data: printer, isLoading, error } = useQuery({
     queryKey: ['printer', printerId],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/printers/${printerId}`);
+      const res = await adminFetch(`${API_BASE}/printers/${printerId}`);
       if (!res.ok) throw new Error('Falha ao carregar impressora');
       return res.json();
     },
@@ -38,7 +38,7 @@ export default function PrinterDetailsPage() {
 
   const toggleMonitorMutation = useMutation({
     mutationFn: async (isMonitored: boolean) => {
-      await fetch(`${API_BASE}/printers/${printerId}/monitor`, {
+      await adminFetch(`${API_BASE}/printers/${printerId}/monitor`, {
         method: 'PUT'
       });
     },

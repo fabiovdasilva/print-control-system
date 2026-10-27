@@ -1,33 +1,78 @@
-export const API_BASE = typeof window !== 'undefined' ? "http://" + window.location.hostname + ":5000/api" : "http://localhost:5000/api";
+export const API_BASE = import.meta.env.VITE_API_BASE
+  ? import.meta.env.VITE_API_BASE.replace(/\/$/, "")
+  : typeof window !== "undefined"
+    ? `http://${window.location.hostname}:5000/api`
+    : "http://localhost:5000/api";
+
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+export async function adminFetch(input: string | URL, init: RequestInit = {}) {
+  const headers = new Headers(init.headers);
+  if (typeof window !== "undefined") {
+    const key = window.sessionStorage.getItem("printflow_admin_key");
+    if (key) headers.set("X-Admin-Key", key);
+  }
+  const response = await fetch(input, { ...init, headers });
+  if (!response.ok) {
+    let message = `Falha na comunicação com a central (${response.status}).`;
+    try {
+      const payload = await response.clone().json();
+      message = payload.message || payload.detail || message;
+    } catch {
+      const body = await response.clone().text().catch(() => "");
+      if (body) message = body;
+    }
+    throw new ApiError(message, response.status);
+  }
+  return response;
+}
 
 export async function fetchClients() {
-    const res = await fetch(`${API_BASE}/clients`);
-    if (!res.ok) throw new Error("Failed to fetch clients");
-    return res.json();
+  return adminFetch(`${API_BASE}/clients`).then((res) => res.json());
 }
 
 export async function fetchPrinters() {
-    const res = await fetch(`${API_BASE}/printers`);
-    if (!res.ok) throw new Error("Failed to fetch printers");
-    return res.json();
+  return adminFetch(`${API_BASE}/printers`).then((res) => res.json());
 }
 
 export async function fetchPrintJobs() {
-    const res = await fetch(`${API_BASE}/printjobs`);
-    if (!res.ok) throw new Error("Failed to fetch print jobs");
-    return res.json();
+  return adminFetch(`${API_BASE}/printjobs`).then((res) => res.json());
+}
+
+export async function fetchAgents() {
+  return adminFetch(`${API_BASE}/agents`).then((res) => res.json());
 }
 
 export async function fetchDashboardTotals() {
-    const clients = await fetchClients();
-    const printers = await fetchPrinters();
-    
-    const totals = {
-        printers: printers.length,
-        online: printers.filter((p: any) => p.status === 'online').length,
-        alerts: printers.filter((p: any) => p.status === 'offline' || (p.toner !== null && p.toner < 15)).length,
-        clients: clients.length
-    };
-    
-    return { clients, printers, totals };
+  const [clients, printers, agents] = await Promise.all([fetchClients(), fetchPrinters(), fetchAgents()]);
+  const agentsByClient = new Map(agents.map((agent: any) => [agent.clientId, agent]));
+  const clientsWithAgent = clients.map((client: any) => ({
+    ...client,
+    agent: agentsByClient.get(client.id) ?? { isOnline: false, lastSeen: null, hosts: [] },
+  }));
+  const totals = {
+    printers: printers.length,
+    online: printers.filter((printer: any) => printer.status === "online").length,
+    alerts: printers.filter((printer: any) => printer.status !== "online" || (printer.toner != null && printer.toner <= 15)).length,
+    clients: clients.length,
+  };
+  return { clients: clientsWithAgent, printers, agents, totals };
+}
+
+export async function downloadAgent(clientId: number) {
+  const response = await adminFetch(`${API_BASE}/clients/${clientId}/download-agent`);
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `PrintAgent_Cliente_${clientId}.exe`;
+  link.click();
+  URL.revokeObjectURL(url);
 }

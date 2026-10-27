@@ -1,88 +1,31 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { AppLayout, KpiCard, PageTitle, Panel } from "@/components/AppLayout";
-import { alerts, clients } from "@/lib/mock-data";
-import { cn } from "@/lib/utils";
+import { fetchDashboardTotals } from "@/lib/api";
+import { AlertTriangle } from "lucide-react";
 
 export const Route = createFileRoute("/alertas")({
-  head: () => ({
-    meta: [
-      { title: "Alertas — PrintFlow" },
-      { name: "description", content: "Central de alertas em tempo real." },
-    ],
-  }),
+  head: () => ({ meta: [{ title: "Alertas — PrintFlow" }, { name: "description", content: "Alertas derivados do estado atual das impressoras." }] }),
   component: Page,
 });
 
 function Page() {
-  const counts = {
-    error: alerts.filter((a) => a.severity === "error").length,
-    warning: alerts.filter((a) => a.severity === "warning").length,
-    info: alerts.filter((a) => a.severity === "info").length,
-  };
+  const { data, isLoading, error, refetch } = useQuery({ queryKey: ["dashboard"], queryFn: fetchDashboardTotals });
+  const alerts = (data?.printers ?? []).filter((printer: any) => printer.status !== "online" || (printer.toner != null && printer.toner <= 15)).map((printer: any) => ({
+    printer,
+    critical: printer.status !== "online",
+    title: printer.status !== "online" ? `Impressora ${printer.status === "offline" ? "offline" : "com alerta"}` : `Toner baixo (${printer.toner}%)`,
+  }));
+  const critical = alerts.filter((alert: any) => alert.critical).length;
+  const warnings = alerts.length - critical;
+
   return (
     <AppLayout breadcrumbs={[{ label: "Alertas" }]}>
-      <PageTitle title="Central de Alertas" subtitle="Eventos em tempo real de todos os clientes monitorados." />
-
-      <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-3">
-        <KpiCard label="Críticos" value={counts.error} hint="Ação imediata" accent="danger" />
-        <KpiCard label="Avisos" value={counts.warning} hint="Próximos da falha" accent="warning" />
-        <KpiCard label="Informativos" value={counts.info} hint="Últimas 24h" accent="primary" />
-      </div>
-
-      <Panel title="Histórico completo">
-        <div className="-mx-6 -mb-6 overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-muted/50 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              <tr>
-                <th className="px-6 py-3">Severidade</th>
-                <th className="px-6 py-3">Evento</th>
-                <th className="px-6 py-3">Cliente</th>
-                <th className="px-6 py-3">Quando</th>
-                <th className="px-6 py-3"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {alerts.map((a) => {
-                const client = clients.find((c) => c.id === a.clientId);
-                return (
-                  <tr key={a.id} className="hover:bg-muted/30">
-                    <td className="px-6 py-4">
-                      <span
-                        className={cn(
-                          "inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
-                          a.severity === "error" && "bg-danger-soft text-danger",
-                          a.severity === "warning" && "bg-warning-soft text-warning-foreground",
-                          a.severity === "info" && "bg-muted text-muted-foreground",
-                        )}
-                      >
-                        {a.severity === "error" ? "Crítico" : a.severity === "warning" ? "Aviso" : "Info"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-medium">{a.title}</div>
-                      <div className="text-xs text-muted-foreground">{a.description}</div>
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      <Link
-                        to="/clientes/$clientId"
-                        params={{ clientId: a.clientId }}
-                        className="text-primary hover:underline"
-                      >
-                        {client?.name}
-                      </Link>
-                    </td>
-                    <td className="px-6 py-4 text-xs text-muted-foreground">
-                      {a.time} • {a.ago}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <button className="text-sm font-medium text-primary hover:underline">Reconhecer</button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+      <PageTitle title="Central de alertas" subtitle="Ocorrências calculadas a partir da última leitura registrada pela central." />
+      {error ? <div role="alert" className="mb-5 rounded-lg border border-danger/30 bg-danger-soft p-4 text-sm text-danger">{error instanceof Error ? error.message : "Falha ao carregar alertas."}<button className="ml-3 underline" onClick={() => void refetch()}>Tentar novamente</button></div> : null}
+      <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-3"><KpiCard label="Críticos" value={critical} hint="Impressoras sem resposta" accent="danger" /><KpiCard label="Avisos" value={warnings} hint="Consumível em nível baixo" accent="warning" /><KpiCard label="Total aberto" value={alerts.length} hint="Estado atual" /></div>
+      <Panel title="Impressoras que exigem atenção">
+        {isLoading ? <p className="text-sm text-muted-foreground">Carregando alertas…</p> : alerts.length === 0 ? <div className="flex items-center gap-3 text-sm text-muted-foreground"><AlertTriangle className="size-4" />Nenhum alerta ativo.</div> : <div className="-mx-6 -mb-6 overflow-x-auto"><table className="w-full text-left"><thead className="bg-muted/50 text-[11px] font-bold uppercase tracking-wider text-muted-foreground"><tr><th className="px-6 py-3">Nível</th><th className="px-6 py-3">Impressora</th><th className="px-6 py-3">Cliente</th><th className="px-6 py-3">Última leitura</th></tr></thead><tbody className="divide-y divide-border">{alerts.map(({ printer, critical, title }: any) => <tr key={printer.id}><td className="px-6 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${critical ? "bg-danger-soft text-danger" : "bg-warning-soft text-warning-foreground"}`}>{critical ? "Crítico" : "Aviso"}</span></td><td className="px-6 py-4"><div className="text-sm font-medium">{title}</div><div className="font-mono text-xs text-muted-foreground">{printer.model} · {printer.ip}</div></td><td className="px-6 py-4"><Link to="/clientes/$clientId" params={{ clientId: String(printer.clientId) }} className="text-sm text-primary hover:underline">{printer.clientName}</Link></td><td className="px-6 py-4 text-xs text-muted-foreground">{printer.lastAccess ? new Date(printer.lastAccess).toLocaleString("pt-BR") : "Sem leitura"}</td></tr>)}</tbody></table></div>}
       </Panel>
     </AppLayout>
   );

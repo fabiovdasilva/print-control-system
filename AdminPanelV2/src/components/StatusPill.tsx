@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import type { PrinterStatus } from "@/lib/mock-data";
+type PrinterStatus = "online" | "offline" | "warning" | "error";
 
 const styles: Record<PrinterStatus, string> = {
   online: "bg-success-soft text-success",

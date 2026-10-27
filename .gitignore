@@ -23,3 +23,6 @@ printcontrol.db
 ServerMock/printcontrol.db
 *.db-shm
 *.db-wal
+
+# Publicação local do agente (gerada pelo script)
+ServerMock/AgentPublish/

@@ -18,14 +18,14 @@ export const Route = createFileRoute("/impressoras")({
 
 function Page() {
   const [searchTerm, setSearchTerm] = useState("");
-  const { data: dashboard, isLoading } = useQuery({
+  const { data: dashboard, isLoading, error, refetch } = useQuery({
     queryKey: ['dashboard'],
     queryFn: fetchDashboardTotals
   });
 
-  if (isLoading || !dashboard) {
-    return <div className="p-8 flex justify-center items-center h-screen">Carregando dados...</div>;
-  }
+  if (isLoading) return <div className="p-8 flex justify-center items-center h-screen">Carregando impressoras…</div>;
+  if (error) return <AppLayout breadcrumbs={[{ label: "Impressoras" }]}><div role="alert" className="rounded-lg border border-danger/30 bg-danger-soft p-5 text-sm text-danger">{error instanceof Error ? error.message : "Falha ao carregar impressoras."}<button className="ml-3 underline" onClick={() => void refetch()}>Tentar novamente</button></div></AppLayout>;
+  if (!dashboard) return null;
 
   const { clients, printers } = dashboard;
 
