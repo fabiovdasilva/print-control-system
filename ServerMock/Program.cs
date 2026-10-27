@@ -10,22 +10,96 @@ using System.Linq;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System;
+using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using ServerMock.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var dashboardOrigins = (Environment.GetEnvironmentVariable("PRINT_CONTROL_CORS_ORIGINS")
+    ?? "http://localhost:5173;http://127.0.0.1:5173")
+    .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll",
-        policy => policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+    options.AddPolicy("Dashboard",
+        policy => policy.WithOrigins(dashboardOrigins)
+            .AllowAnyMethod()
+            .WithHeaders("Content-Type", "X-Admin-Key", "X-Agent-Client", "X-Agent-Token"));
 });
 
+var databasePath = Environment.GetEnvironmentVariable("PRINT_CONTROL_DB_PATH")
+    ?? builder.Configuration["Database:Path"]
+    ?? Path.Combine(builder.Environment.ContentRootPath, "printcontrol.db");
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite("Data Source=printcontrol.db"));
+    options.UseSqlite($"Data Source={databasePath}"));
+
+var adminApiKey = Environment.GetEnvironmentVariable("PRINT_CONTROL_ADMIN_KEY")
+    ?? builder.Configuration["Security:AdminApiKey"];
+if (string.IsNullOrWhiteSpace(adminApiKey))
+{
+    adminApiKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+    Console.WriteLine($"[SEGURANÇA] Chave administrativa temporária (configure PRINT_CONTROL_ADMIN_KEY para persistir): {adminApiKey}");
+}
 
 var app = builder.Build();
+app.UseCors("Dashboard");
+app.Use(async (context, next) =>
+{
+    var path = context.Request.Path.Value?.TrimEnd('/') ?? string.Empty;
+    if (context.Request.Method == "OPTIONS" || path == "/api/health")
+    {
+        await next();
+        return;
+    }
 
-app.UseCors("AllowAll");
+    var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+    var method = context.Request.Method;
+    var isAgentEndpoint =
+        (method == "POST" && (path == "/api/agent/heartbeat" || path == "/api/agent/report-printers" || path == "/api/agent/report-job")) ||
+        (method == "GET" && segments.Length == 4 && segments[0] == "api" && segments[1] == "agent" && (segments[3] == "commands" || segments[3] == "quotas"));
+
+    if (isAgentEndpoint)
+    {
+        if (!int.TryParse(context.Request.Headers["X-Agent-Client"], out var clientId))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            await context.Response.WriteAsJsonAsync(new { message = "Agent identity is missing." });
+            return;
+        }
+
+        if (segments.Length == 4 && int.TryParse(segments[2], out var routeClientId) && routeClientId != clientId)
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return;
+        }
+
+        var providedToken = context.Request.Headers["X-Agent-Token"].ToString();
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var client = await db.Clients.FindAsync(clientId);
+        var expectedHash = client?.AgentTokenHash;
+        var providedHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(providedToken)));
+        if (string.IsNullOrWhiteSpace(expectedHash) || !SecretsMatch(providedHash, expectedHash))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            await context.Response.WriteAsJsonAsync(new { message = "Invalid agent credentials." });
+            return;
+        }
+    }
+    else
+    {
+        var providedKey = context.Request.Headers["X-Admin-Key"].ToString();
+        if (!SecretsMatch(providedKey, adminApiKey))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            await context.Response.WriteAsJsonAsync(new { message = "Admin key is required." });
+            return;
+        }
+    }
+
+    await next();
+});
 
 using (var scope = app.Services.CreateScope())
 {
@@ -42,10 +116,11 @@ using (var scope = app.Services.CreateScope())
         db.Database.ExecuteSqlRaw("ALTER TABLE Clients ADD COLUMN SnmpCommunity TEXT NOT NULL DEFAULT 'public'");
         db.Database.ExecuteSqlRaw("ALTER TABLE Clients ADD COLUMN PollInterval INTEGER NOT NULL DEFAULT 15");
     } catch { }
+    try { db.Database.ExecuteSqlRaw("ALTER TABLE Clients ADD COLUMN AgentTokenHash TEXT NULL"); } catch { }
+    db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS PendingAgentCommands (Id INTEGER NOT NULL CONSTRAINT PK_PendingAgentCommands PRIMARY KEY AUTOINCREMENT, ClientId INTEGER NOT NULL, Command TEXT NOT NULL, Hostname TEXT NULL, CreatedAt TEXT NOT NULL, DeliveredAt TEXT NULL)");
 }
 
 // Dicionários em memória (sem precisar de DB extra)
-ConcurrentDictionary<int, string> pendingCommands = new();
 ConcurrentDictionary<int, ConcurrentDictionary<string, DateTime>> agentHeartbeats = new();
 
 
@@ -255,41 +330,30 @@ app.MapDelete("/api/printers/{id}", async (int id, AppDbContext db) =>
 // Scan com suporte a IP/faixa manual (corpo opcional)
 app.MapPost("/api/admin/force-scan/{clientId}", async (int clientId, AppDbContext db, HttpRequest request) =>
 {
-    // Auto-detect local IP to simulate real scan
-    string localIp = "192.168.0.1";
-    try
-    {
-        var host = System.Net.Dns.GetHostEntry(System.Net.Dns.GetHostName());
-        var ip = host.AddressList.FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
-        if (ip != null) localIp = ip.ToString();
-    }
-    catch { }
-
-    var parts = localIp.Split('.');
-    string detectedSubnet = parts.Length == 4 ? $"{parts[0]}.{parts[1]}.{parts[2]}.0/24" : "192.168.0.0/24";
-
     var client = await db.Clients.FindAsync(clientId);
-    if (client != null)
+    if (client == null) return Results.NotFound(new { message = "Cliente não encontrado." });
+
+    string command = "SCAN_NETWORK";
+    if (request.ContentLength > 0)
     {
-        client.NetworkSubnets = detectedSubnet;
-        await db.SaveChangesAsync();
+        using var reader = new StreamReader(request.Body);
+        var body = await reader.ReadToEndAsync();
+        if (!string.IsNullOrWhiteSpace(body))
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("ip", out var ipElement))
+            {
+                var target = ipElement.GetString()?.Trim();
+                if (string.IsNullOrWhiteSpace(target) || !(System.Net.IPAddress.TryParse(target, out _) || Regex.IsMatch(target, @"^\d{1,3}\.\d{1,3}\.\d{1,3}$")))
+                    return Results.BadRequest(new { message = "Informe um IP ou prefixo IPv4 válido." });
+                command = $"SCAN_IP:{target}";
+            }
+        }
     }
 
-    // Simulate network sweep delay (2 seconds)
-    await Task.Delay(2000);
-
-    // Mock discovered printers based on the local IP
-    var discovered = new[]
-    {
-        new { ip = $"{parts[0]}.{parts[1]}.{parts[2]}.115", model = "HP LaserJet Pro M404", mac = "00:1A:2B:3C:4D:5E" },
-        new { ip = $"{parts[0]}.{parts[1]}.{parts[2]}.116", model = "Brother HL-L8360CDW", mac = "00:1A:2B:3C:4D:5F" }
-    };
-
-    return Results.Ok(new { 
-        message = "Varredura concluída", 
-        network = detectedSubnet,
-        discovered = discovered 
-    });
+    db.PendingAgentCommands.Add(new PendingAgentCommand { ClientId = clientId, Command = command });
+    await db.SaveChangesAsync();
+    return Results.Accepted($"/api/agent/{clientId}/commands", new { message = "Varredura adicionada à fila do agente.", command });
 });
 
 app.MapPost("/api/printers/approve", async (List<ApprovePrinterRequest> reqs, AppDbContext db) =>
@@ -321,22 +385,34 @@ app.MapPost("/api/printers/approve", async (List<ApprovePrinterRequest> reqs, Ap
 });
 
 // Enviar comando de desinstalação para o agente
-app.MapPost("/api/admin/uninstall-agent/{clientId}", (int clientId) =>
+app.MapPost("/api/admin/uninstall-agent/{clientId}", async (int clientId, AppDbContext db) =>
 {
-    pendingCommands[clientId] = "UNINSTALL";
-    return Results.Ok(new { message = "Comando de desinstalação enviado ao agente!" });
+    if (!await db.Clients.AnyAsync(c => c.Id == clientId)) return Results.NotFound();
+    db.PendingAgentCommands.Add(new PendingAgentCommand { ClientId = clientId, Command = "UNINSTALL" });
+    await db.SaveChangesAsync();
+    return Results.Accepted($"/api/agent/{clientId}/commands", new { message = "Desinstalação adicionada à fila do agente." });
 });
 
-app.MapGet("/api/clients/{id}/download-agent", async (HttpRequest request, int id) =>
+app.MapGet("/api/clients/{id}/download-agent", async (HttpRequest request, int id, AppDbContext db, IWebHostEnvironment environment, IConfiguration configuration) =>
 {
-    string agentExe = @"C:\print_agent\Agent\bin\Release\net8.0-windows\win-x64\publish\Agent.exe";
-    if (!File.Exists(agentExe)) return Results.BadRequest("Base do Agente não encontrada. Compile com: dotnet publish Agent -r win-x64");
+    var client = await db.Clients.FindAsync(id);
+    if (client == null) return Results.NotFound(new { message = "Cliente não encontrado." });
+
+    var agentExe = Environment.GetEnvironmentVariable("PRINT_CONTROL_AGENT_EXE")
+        ?? configuration["Agent:ExecutablePath"]
+        ?? Path.GetFullPath(Path.Combine(environment.ContentRootPath, "AgentPublish", "Agent.exe"));
+    if (!File.Exists(agentExe))
+        return Results.Problem("Agente ainda não publicado. Execute o script de publicação documentado no README.", statusCode: StatusCodes.Status503ServiceUnavailable);
+
+    var agentToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    client.AgentTokenHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(agentToken)));
+    await db.SaveChangesAsync();
 
     byte[] baseBytes = await File.ReadAllBytesAsync(agentExe);
-    string serverUrl = $"{request.Scheme}://{request.Host.Value}";
-    string configPayload = $"___PRINT_AGENT_CLIENT_ID:{id}|{serverUrl}___";
+    var serverUrl = $"{request.Scheme}://{request.Host.Value}";
+    var configJson = JsonSerializer.Serialize(new { ClientId = id, ServerUrl = serverUrl, AgentToken = agentToken });
+    var configPayload = "___PRINT_AGENT_CONFIG:" + Convert.ToBase64String(Encoding.UTF8.GetBytes(configJson)) + "___";
     byte[] configBytes = Encoding.UTF8.GetBytes(configPayload);
-
     byte[] finalBytes = new byte[baseBytes.Length + configBytes.Length];
     Buffer.BlockCopy(baseBytes, 0, finalBytes, 0, baseBytes.Length);
     Buffer.BlockCopy(configBytes, 0, finalBytes, baseBytes.Length, configBytes.Length);
@@ -405,6 +481,8 @@ app.MapPost("/api/agent/heartbeat", async (HttpRequest request) =>
     if (doc.RootElement.TryGetProperty("ClientId", out var idProp))
     {
         int clientId = idProp.GetInt32();
+        if (!int.TryParse(request.Headers["X-Agent-Client"], out var authenticatedClientId) || authenticatedClientId != clientId)
+            return Results.Forbid();
         string hostname = doc.RootElement.TryGetProperty("Hostname", out var hProp) ? hProp.GetString() ?? "Unknown" : "Unknown";
         
         var hosts = agentHeartbeats.GetOrAdd(clientId, _ => new ConcurrentDictionary<string, DateTime>());
@@ -443,30 +521,37 @@ app.MapGet("/api/agent/{clientId}/status", (int clientId) =>
 });
 
 // Comandos pendentes para o agente
-app.MapGet("/api/agent/{clientId}/commands", (int clientId, HttpRequest req) =>
+app.MapGet("/api/agent/{clientId}/commands", async (int clientId, HttpRequest req, AppDbContext db) =>
 {
-    string cmd = "IDLE";
-    if (pendingCommands.TryGetValue(clientId, out string? pendingCmd) && pendingCmd != null)
+    var hostname = req.Query["hostname"].ToString();
+    var pending = await db.PendingAgentCommands
+        .Where(c => c.ClientId == clientId && c.DeliveredAt == null && (c.Hostname == null || c.Hostname == hostname))
+        .OrderBy(c => c.CreatedAt)
+        .FirstOrDefaultAsync();
+
+    var command = pending?.Command ?? "IDLE";
+    if (pending != null)
     {
-        cmd = pendingCmd;
-        pendingCommands.TryRemove(clientId, out _);
+        pending.DeliveredAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
     }
 
+    var client = await db.Clients.FindAsync(clientId);
     var cfg = new AgentRoleConfig();
-    string? hostname = req.Query["hostname"];
-    if (!string.IsNullOrEmpty(hostname))
+    if (!string.IsNullOrWhiteSpace(hostname))
     {
         var cHosts = agentConfigs.GetOrAdd(clientId, _ => new());
-        bool isFirst = cHosts.IsEmpty;
-        cfg = cHosts.GetOrAdd(hostname, _ => new AgentRoleConfig {
-            IsScannerEnabled = isFirst // O primeiro agente vira scanner por padrão
-        });
+        var isFirst = cHosts.IsEmpty;
+        cfg = cHosts.GetOrAdd(hostname, _ => new AgentRoleConfig { IsScannerEnabled = isFirst });
     }
 
-    return Results.Json(new { 
-        Command = cmd,
+    return Results.Json(new {
+        Command = command,
         IsScannerEnabled = cfg.IsScannerEnabled,
-        IsSpoolerEnabled = cfg.IsSpoolerEnabled
+        IsSpoolerEnabled = cfg.IsSpoolerEnabled,
+        NetworkSubnets = client?.NetworkSubnets ?? string.Empty,
+        SnmpCommunity = client?.SnmpCommunity ?? "public",
+        PollInterval = client?.PollInterval ?? 15
     });
 });
 
@@ -493,6 +578,8 @@ app.MapPost("/api/agent/report-printers", async (HttpRequest request, AppDbConte
     using JsonDocument doc = JsonDocument.Parse(body);
 
     int clientId = doc.RootElement.GetProperty("ClientId").GetInt32();
+    if (!int.TryParse(request.Headers["X-Agent-Client"], out var authenticatedClientId) || authenticatedClientId != clientId)
+        return Results.Forbid();
     var printersArr = doc.RootElement.GetProperty("Printers").EnumerateArray().ToList();
     var scannedIps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     if (doc.RootElement.TryGetProperty("ScannedIps", out var scannedIpsElement) && scannedIpsElement.ValueKind == JsonValueKind.Array)
@@ -563,6 +650,8 @@ app.MapPost("/api/agent/report-job", async (HttpRequest request, AppDbContext db
     using JsonDocument doc = JsonDocument.Parse(body);
 
     int clientId  = doc.RootElement.GetProperty("ClientId").GetInt32();
+    if (!int.TryParse(request.Headers["X-Agent-Client"], out var authenticatedClientId) || authenticatedClientId != clientId)
+        return Results.Forbid();
     string model  = doc.RootElement.TryGetProperty("PrinterModel",  out var mP) ? mP.GetString()  ?? "" : "";
     string docName= doc.RootElement.TryGetProperty("DocumentName",  out var dP) ? dP.GetString()  ?? "" : "";
     string user   = doc.RootElement.TryGetProperty("UserName",      out var uP) ? uP.GetString()  ?? "" : "";
@@ -644,6 +733,16 @@ app.MapGet("/api/agent/{clientId}/quotas", async (int clientId, AppDbContext db)
 });
 
 
+
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
+app.MapGet("/api/admin/health", () => Results.Ok(new { status = "ok" }));
+
+static bool SecretsMatch(string provided, string expected)
+{
+    var left = SHA256.HashData(Encoding.UTF8.GetBytes(provided));
+    var right = SHA256.HashData(Encoding.UTF8.GetBytes(expected));
+    return CryptographicOperations.FixedTimeEquals(left, right);
+}
 
 app.Run("http://0.0.0.0:5000");
 

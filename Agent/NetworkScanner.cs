@@ -21,75 +21,47 @@ namespace Agent
             return RunScannerDetailed(customIp).Printers;
         }
 
-        public static NetworkScanResult RunScannerDetailed(string? customIp = null)
+        public static NetworkScanResult RunScannerDetailed(string? customIp = null, string snmpCommunity = "public", string networkSubnets = "")
         {
             var ipsToScan = new List<string>();
 
             if (!string.IsNullOrWhiteSpace(customIp))
             {
-                // ---- MODO MANUAL: IP único ou faixa ----
-                string target = customIp.Trim();
-
-                // Checa se é um IP completo (ex: 192.168.1.100)
-                if (System.Net.IPAddress.TryParse(target, out _))
-                {
-                    ipsToScan.Add(target);
-                }
-                else
-                {
-                    // Trata como prefixo de rede (ex: "192.168.1") → varre .1 a .254
-                    for (int i = 1; i <= 254; i++)
-                        ipsToScan.Add($"{target}.{i}");
-                }
+                ipsToScan.AddRange(ExpandTarget(customIp.Trim()));
+            }
+            else if (!string.IsNullOrWhiteSpace(networkSubnets))
+            {
+                foreach (var target in networkSubnets.Split(new[] { ',', ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    ipsToScan.AddRange(ExpandTarget(target));
             }
             else
             {
-                // ---- MODO AUTOMÁTICO: descobre a rede local ----
-            foreach (var networkInterface in NetworkInterface.GetAllNetworkInterfaces())
-            {
-                if (networkInterface.OperationalStatus == OperationalStatus.Up && 
-                    networkInterface.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+                // Sem sub-redes configuradas, detecta as redes locais elegíveis.
+                foreach (var networkInterface in NetworkInterface.GetAllNetworkInterfaces())
                 {
-                    var ipProperties = networkInterface.GetIPProperties();
-                    foreach (var address in ipProperties.UnicastAddresses)
-                    {
-                        if (address.Address.AddressFamily == AddressFamily.InterNetwork)
-                        {
-                            var ip = address.Address;
-                            var mask = address.IPv4Mask;
-                            
-                            // Ignorar IPs APIPA, Loopbacks do Windows, e interfaces com Máscara 0.0.0.0
-                            if (mask != null && 
-                                mask.ToString() != "0.0.0.0" && 
-                                mask.ToString() != "255.255.255.255" &&
-                                !ip.ToString().StartsWith("169.254") &&
-                                !ip.ToString().StartsWith("127.")) 
-                            {
-                                // Ignorar interfaces virtuais de bancos e VPNs
-                                string interfaceName = networkInterface.Name.ToLower();
-                                string description = networkInterface.Description.ToLower();
-                                
-                                if (interfaceName.Contains("loopback") || description.Contains("loopback") ||
-                                    interfaceName.Contains("virtual") || description.Contains("virtual"))
-                                {
-                                    continue;
-                                }
+                    if (networkInterface.OperationalStatus != OperationalStatus.Up || networkInterface.NetworkInterfaceType == NetworkInterfaceType.Loopback)
+                        continue;
 
-                                uint netSize = GetNetworkSize(ip, mask);
-                                
-                                if (netSize <= 4096) 
-                                {
-                                    var networkIps = GetIpsInNetwork(ip, mask);
-                                    ipsToScan.AddRange(networkIps);
-                                }
-                            }
-                        }
+                    foreach (var address in networkInterface.GetIPProperties().UnicastAddresses)
+                    {
+                        if (address.Address.AddressFamily != AddressFamily.InterNetwork) continue;
+                        var ip = address.Address;
+                        var mask = address.IPv4Mask;
+                        if (mask == null || mask.ToString() is "0.0.0.0" or "255.255.255.255" || ip.ToString().StartsWith("169.254") || ip.ToString().StartsWith("127."))
+                            continue;
+
+                        string interfaceName = networkInterface.Name.ToLowerInvariant();
+                        string description = networkInterface.Description.ToLowerInvariant();
+                        if (interfaceName.Contains("loopback") || description.Contains("loopback") || interfaceName.Contains("virtual") || description.Contains("virtual"))
+                            continue;
+
+                        if (GetNetworkSize(ip, mask) <= 4096)
+                            ipsToScan.AddRange(GetIpsInNetwork(ip, mask));
                     }
                 }
             }
-            } // fim else (modo automático)
 
-            ipsToScan = ipsToScan.Distinct(StringComparer.Ordinal).ToList();
+            ipsToScan = ipsToScan.Distinct(StringComparer.Ordinal).Take(4096).ToList();
             if (ipsToScan.Count == 0) return new NetworkScanResult(ipsToScan, new List<PrinterInfo>());
 
             var printerList = new ConcurrentBag<PrinterInfo>();
@@ -102,7 +74,7 @@ namespace Agent
                 {
                     var printerIp = IPAddress.Parse(ip);
                     var endPoint = new IPEndPoint(printerIp, 161);
-                    var community = new OctetString("public");
+                    var community = new OctetString(string.IsNullOrWhiteSpace(snmpCommunity) ? "public" : snmpCommunity);
                     
                     // OIDs básicos para identificação
                     string sysDescrOid = "1.3.6.1.2.1.1.1.0"; 
@@ -174,6 +146,39 @@ namespace Agent
             });
 
             return new NetworkScanResult(ipsToScan, new List<PrinterInfo>(printerList));
+        }
+
+        private static List<string> ExpandTarget(string target)
+        {
+            if (IPAddress.TryParse(target, out var single) && single.AddressFamily == AddressFamily.InterNetwork)
+                return new List<string> { single.ToString() };
+
+            var parts = target.Split('/', 2);
+            if (parts.Length == 2 && IPAddress.TryParse(parts[0], out var network) && network.AddressFamily == AddressFamily.InterNetwork &&
+                int.TryParse(parts[1], out var prefixLength) && prefixLength >= 0 && prefixLength <= 32)
+            {
+                int hostBits = 32 - prefixLength;
+                long addressCount = 1L << hostBits;
+                if (addressCount > 4096) return new List<string>();
+                uint address = BitConverter.ToUInt32(ReverseIfLittleEndian(network.GetAddressBytes()), 0);
+                uint mask = prefixLength == 0 ? 0 : uint.MaxValue << hostBits;
+                uint first = address & mask;
+                uint last = first | ~mask;
+                var result = new List<string>();
+                if (prefixLength == 32) return new List<string> { network.ToString() };
+                for (uint value = first + 1; value < last; value++)
+                    result.Add(new IPAddress(ReverseIfLittleEndian(BitConverter.GetBytes(value))).ToString());
+                return result;
+            }
+
+            // Compatibilidade com o formato antigo 192.168.1
+            if (System.Text.RegularExpressions.Regex.IsMatch(target, @"^\d{1,3}\.\d{1,3}\.\d{1,3}$"))
+            {
+                var result = new List<string>();
+                for (int i = 1; i <= 254; i++) result.Add($"{target}.{i}");
+                return result;
+            }
+            return new List<string>();
         }
 
         private static uint GetNetworkSize(IPAddress ipAddress, IPAddress subnetMask)

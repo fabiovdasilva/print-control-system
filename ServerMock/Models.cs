@@ -18,6 +18,7 @@ namespace ServerMock.Models
         public string NetworkSubnets { get; set; } = string.Empty; // ex: 192.168.1.0/24
         public string SnmpCommunity { get; set; } = "public";
         public int PollInterval { get; set; } = 15; // em minutos
+        public string? AgentTokenHash { get; set; }
         
         public List<Printer> Printers { get; set; } = new();
         public List<PrintJob> PrintJobs { get; set; } = new();
@@ -61,6 +62,16 @@ namespace ServerMock.Models
         public Printer? Printer { get; set; }
     }
 
+    public class PendingAgentCommand
+    {
+        public int Id { get; set; }
+        public int ClientId { get; set; }
+        public string Command { get; set; } = string.Empty;
+        public string? Hostname { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime? DeliveredAt { get; set; }
+    }
+
     public class UserQuota
     {
         public int Id { get; set; }
@@ -79,6 +90,7 @@ namespace ServerMock.Models
         public DbSet<Printer> Printers => Set<Printer>();
         public DbSet<PrintJob> PrintJobs => Set<PrintJob>();
         public DbSet<UserQuota> UserQuotas => Set<UserQuota>();
+        public DbSet<PendingAgentCommand> PendingAgentCommands => Set<PendingAgentCommand>();
 
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 

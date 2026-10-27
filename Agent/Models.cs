@@ -33,6 +33,7 @@ namespace Agent
     {
         public int ClientId { get; set; } = 1;
         public string? ServerUrl { get; set; } = null;
+        public string? AgentToken { get; set; } = null;
     }
 
     public class UserQuota

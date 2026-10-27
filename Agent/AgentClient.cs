@@ -13,6 +13,9 @@ namespace Agent
         private static readonly HttpClient _http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
         private static string _serverUrl = "http://127.0.0.1:5000";
         private static int _clientId = 0;
+        private static string _agentToken = string.Empty;
+        private static string _snmpCommunity = "public";
+        private static string _networkSubnets = string.Empty;
         private static bool _serverReachable = false;
         public static List<UserQuota> CurrentQuotas { get; private set; } = new List<UserQuota>();
 
@@ -22,16 +25,30 @@ namespace Agent
 
         public static async Task ForceScan()
         {
+            LoadConfig();
+            ConfigureAgentHeaders();
+            if (_clientId <= 0 || string.IsNullOrWhiteSpace(_agentToken)) return;
+
             try
             {
-                await _http.PostAsync($"{_serverUrl}/api/admin/force-scan/{_clientId}", null);
+                var scan = NetworkScanner.RunScannerDetailed(snmpCommunity: _snmpCommunity, networkSubnets: _networkSubnets);
+                await ReportPrinters(scan);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Agente] Falha na varredura manual: {ex.Message}");
+            }
         }
 
         public static async Task StartPolling(CancellationToken ct = default, TrayApp? tray = null)
         {
             LoadConfig();
+            ConfigureAgentHeaders();
+            if (_clientId <= 0 || string.IsNullOrWhiteSpace(_agentToken))
+            {
+                Console.WriteLine("[Agente] Configuração ou credencial ausente. Baixe novamente o instalador pela central.");
+                return;
+            }
 
             int heartbeatTick = 0;
             while (!ct.IsCancellationRequested)
@@ -47,7 +64,7 @@ namespace Agent
                         await FetchQuotas();
 
                     // Verifica comandos pendentes
-                    var response = await _http.GetStringAsync($"{_serverUrl}/api/agent/{_clientId}/commands?hostname={Environment.MachineName}");
+                    var response = await _http.GetStringAsync($"{_serverUrl}/api/agent/{_clientId}/commands?hostname={Uri.EscapeDataString(Environment.MachineName)}");
                     _serverReachable = true;
 
                     using JsonDocument doc = JsonDocument.Parse(response);
@@ -61,6 +78,10 @@ namespace Agent
                     bool isSpooler = true;
                     if (doc.RootElement.TryGetProperty("IsScannerEnabled", out JsonElement scanEl)) isScanner = scanEl.GetBoolean();
                     if (doc.RootElement.TryGetProperty("IsSpoolerEnabled", out JsonElement spoolEl)) isSpooler = spoolEl.GetBoolean();
+                    if (doc.RootElement.TryGetProperty("SnmpCommunity", out JsonElement communityEl))
+                        _snmpCommunity = communityEl.GetString() ?? "public";
+                    if (doc.RootElement.TryGetProperty("NetworkSubnets", out JsonElement subnetsEl))
+                        _networkSubnets = subnetsEl.GetString() ?? string.Empty;
 
                     if (isSpooler && !SpoolerMonitor.IsRunning)
                         SpoolerMonitor.StartBackground(OnPrintJobArrived);
@@ -73,11 +94,9 @@ namespace Agent
                         {
                         string? customIp = command.StartsWith("SCAN_IP:") ? command.Substring("SCAN_IP:".Length).Trim() : null;
                         Console.WriteLine($"[Agente] Recebido {command} — iniciando varredura...");
-                        var scan = NetworkScanner.RunScannerDetailed(customIp);
+                        var scan = NetworkScanner.RunScannerDetailed(customIp, _snmpCommunity, _networkSubnets);
                         Console.WriteLine($"[Agente] {scan.Printers.Count} impressoras encontradas em {scan.ScannedIps.Count} endereços consultados.");
-                        string json = JsonSerializer.Serialize(new { ClientId = _clientId, Printers = scan.Printers, ScannedIps = scan.ScannedIps });
-                        await _http.PostAsync($"{_serverUrl}/api/agent/report-printers",
-                            new StringContent(json, Encoding.UTF8, "application/json"));
+                        await ReportPrinters(scan);
                         }
                         else
                         {
@@ -164,44 +183,62 @@ namespace Agent
             });
         }
 
+        private static void ConfigureAgentHeaders()
+        {
+            _http.DefaultRequestHeaders.Remove("X-Agent-Client");
+            _http.DefaultRequestHeaders.Remove("X-Agent-Token");
+            if (_clientId > 0) _http.DefaultRequestHeaders.Add("X-Agent-Client", _clientId.ToString());
+            if (!string.IsNullOrWhiteSpace(_agentToken)) _http.DefaultRequestHeaders.Add("X-Agent-Token", _agentToken);
+        }
+
+        private static async Task ReportPrinters(NetworkScanResult scan)
+        {
+            string json = JsonSerializer.Serialize(new { ClientId = _clientId, Printers = scan.Printers, ScannedIps = scan.ScannedIps });
+            using var response = await _http.PostAsync($"{_serverUrl}/api/agent/report-printers",
+                new StringContent(json, Encoding.UTF8, "application/json"));
+            response.EnsureSuccessStatusCode();
+        }
+
         private static void LoadConfig()
         {
-            // 1. Tenta ler configuração injetada no próprio binário (tail bytes)
+            // 1. Tenta ler a configuração segura injetada no instalador.
             try
             {
                 string exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "";
                 if (File.Exists(exePath))
                 {
                     using var fs = new FileStream(exePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                    long startRead = Math.Max(0, fs.Length - 1024);
+                    long startRead = Math.Max(0, fs.Length - 4096);
                     fs.Seek(startRead, SeekOrigin.Begin);
                     byte[] tail = new byte[(int)(fs.Length - startRead)];
-                    fs.Read(tail, 0, tail.Length);
+                    fs.ReadExactly(tail);
                     string text = Encoding.UTF8.GetString(tail);
-
-                    const string magic = "___PRINT_AGENT_CLIENT_ID:";
-                    int idx = text.LastIndexOf(magic);
+                    const string marker = "___PRINT_AGENT_CONFIG:";
+                    int idx = text.LastIndexOf(marker, StringComparison.Ordinal);
                     if (idx >= 0)
                     {
-                        int start = idx + magic.Length;
-                        int end   = text.IndexOf("___", start);
+                        int start = idx + marker.Length;
+                        int end = text.IndexOf("___", start, StringComparison.Ordinal);
                         if (end > start)
                         {
                             string payload = text.Substring(start, end - start);
-                            string[] parts = payload.Split('|');
-                            if (parts.Length > 0 && int.TryParse(parts[0], out int id))
+                            var cfg = JsonSerializer.Deserialize<AgentConfig>(Convert.FromBase64String(payload));
+                            if (cfg != null && cfg.ClientId > 0 && !string.IsNullOrWhiteSpace(cfg.AgentToken))
                             {
-                                _clientId = id;
-                                if (parts.Length > 1 && !string.IsNullOrWhiteSpace(parts[1]))
-                                    _serverUrl = parts[1];
-                                Console.WriteLine($"[Agente] Config injetada: ClientId={_clientId}, Server={_serverUrl}");
+                                _clientId = cfg.ClientId;
+                                _serverUrl = string.IsNullOrWhiteSpace(cfg.ServerUrl) ? _serverUrl : cfg.ServerUrl.TrimEnd('/');
+                                _agentToken = cfg.AgentToken;
+                                Console.WriteLine($"[Agente] Configuração carregada para o cliente {_clientId}.");
                                 return;
                             }
                         }
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Agente] Não foi possível ler configuração do instalador: {ex.Message}");
+            }
 
             // 2. Fallback: arquivo config.json local (dev/debug)
             string path = Path.Combine(
@@ -217,6 +254,7 @@ namespace Agent
                     {
                         _clientId  = cfg.ClientId;
                         _serverUrl = cfg.ServerUrl ?? _serverUrl;
+                        _agentToken = cfg.AgentToken ?? string.Empty;
                     }
                 }
                 catch { }
