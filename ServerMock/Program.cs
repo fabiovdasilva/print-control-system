@@ -56,7 +56,8 @@ app.Use(async (context, next) =>
     var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
     var method = context.Request.Method;
     var isAgentEndpoint =
-        (method == "POST" && (path == "/api/agent/heartbeat" || path == "/api/agent/report-printers" || path == "/api/agent/report-job")) ||
+        (method == "POST" && (path == "/api/agent/heartbeat" || path == "/api/agent/report-printers" || path == "/api/agent/report-job" ||
+            (segments.Length == 6 && segments[0] == "api" && segments[1] == "agent" && segments[3] == "commands" && segments[5] == "ack"))) ||
         (method == "GET" && segments.Length == 4 && segments[0] == "api" && segments[1] == "agent" && (segments[3] == "commands" || segments[3] == "quotas"));
 
     if (isAgentEndpoint)
@@ -68,7 +69,7 @@ app.Use(async (context, next) =>
             return;
         }
 
-        if (segments.Length == 4 && int.TryParse(segments[2], out var routeClientId) && routeClientId != clientId)
+        if (segments.Length >= 3 && int.TryParse(segments[2], out var routeClientId) && routeClientId != clientId)
         {
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             return;
@@ -115,7 +116,10 @@ using (var scope = app.Services.CreateScope())
     try { db.Database.ExecuteSqlRaw("ALTER TABLE Clients ADD COLUMN SnmpCommunity TEXT NOT NULL DEFAULT 'public'"); } catch { }
     try { db.Database.ExecuteSqlRaw("ALTER TABLE Clients ADD COLUMN PollInterval INTEGER NOT NULL DEFAULT 15"); } catch { }
     try { db.Database.ExecuteSqlRaw("ALTER TABLE Clients ADD COLUMN AgentTokenHash TEXT NULL"); } catch { }
-    db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS PendingAgentCommands (Id INTEGER NOT NULL CONSTRAINT PK_PendingAgentCommands PRIMARY KEY AUTOINCREMENT, ClientId INTEGER NOT NULL, Command TEXT NOT NULL, Hostname TEXT NULL, CreatedAt TEXT NOT NULL, DeliveredAt TEXT NULL)");
+    db.Database.ExecuteSqlRaw("CREATE TABLE IF NOT EXISTS PendingAgentCommands (Id INTEGER NOT NULL CONSTRAINT PK_PendingAgentCommands PRIMARY KEY AUTOINCREMENT, ClientId INTEGER NOT NULL, Command TEXT NOT NULL, Hostname TEXT NULL, CreatedAt TEXT NOT NULL, DeliveredAt TEXT NULL, AcknowledgedAt TEXT NULL, Attempts INTEGER NOT NULL DEFAULT 0, LastError TEXT NULL)");
+    try { db.Database.ExecuteSqlRaw("ALTER TABLE PendingAgentCommands ADD COLUMN AcknowledgedAt TEXT NULL"); } catch { }
+    try { db.Database.ExecuteSqlRaw("ALTER TABLE PendingAgentCommands ADD COLUMN Attempts INTEGER NOT NULL DEFAULT 0"); } catch { }
+    try { db.Database.ExecuteSqlRaw("ALTER TABLE PendingAgentCommands ADD COLUMN LastError TEXT NULL"); } catch { }
 }
 
 // Dicionários em memória (sem precisar de DB extra)
@@ -123,6 +127,20 @@ ConcurrentDictionary<int, ConcurrentDictionary<string, DateTime>> agentHeartbeat
 
 
 ConcurrentDictionary<int, ConcurrentDictionary<string, AgentRoleConfig>> agentConfigs = new();
+
+AgentRoleConfig GetOrCreateAgentRoleConfig(int clientId, string hostname)
+{
+    var configs = agentConfigs.GetOrAdd(clientId, _ => new());
+    lock (configs)
+    {
+        if (configs.TryGetValue(hostname, out var existing))
+            return existing;
+
+        var config = new AgentRoleConfig { IsScannerEnabled = configs.IsEmpty };
+        configs[hostname] = config;
+        return config;
+    }
+}
 
 // ==========================================
 // CLIENTES
@@ -521,9 +539,8 @@ app.MapGet("/api/agent/{clientId}/status", (int clientId) =>
 {
     if (agentHeartbeats.TryGetValue(clientId, out var hosts))
     {
-        var cHosts = agentConfigs.GetOrAdd(clientId, _ => new());
         var activeHosts = hosts.Select(kv => {
-            var cfg = cHosts.GetOrAdd(kv.Key, _ => new AgentRoleConfig());
+            var cfg = GetOrCreateAgentRoleConfig(clientId, kv.Key);
             return new {
                 hostname = kv.Key,
                 lastSeen = kv.Value.ToString("yyyy-MM-ddTHH:mm:ssZ"),
@@ -547,29 +564,45 @@ app.MapGet("/api/agent/{clientId}/status", (int clientId) =>
 app.MapGet("/api/agent/{clientId}/commands", async (int clientId, HttpRequest req, AppDbContext db) =>
 {
     var hostname = req.Query["hostname"].ToString();
+    var cfg = string.IsNullOrWhiteSpace(hostname)
+        ? new AgentRoleConfig()
+        : GetOrCreateAgentRoleConfig(clientId, hostname);
+
+    var leaseExpiredAt = DateTime.UtcNow.AddMinutes(-1);
     var pending = await db.PendingAgentCommands
-        .Where(c => c.ClientId == clientId && c.DeliveredAt == null && (c.Hostname == null || c.Hostname == hostname))
+        .Where(c => c.ClientId == clientId && c.AcknowledgedAt == null &&
+            (c.Hostname == null || c.Hostname == hostname) &&
+            (c.DeliveredAt == null || c.DeliveredAt <= leaseExpiredAt))
         .OrderBy(c => c.CreatedAt)
         .FirstOrDefaultAsync();
 
-    var command = pending?.Command ?? "IDLE";
+    // A non-scanner must not consume a network scan intended for another agent.
+    if (pending != null && (pending.Command == "SCAN_NETWORK" || pending.Command.StartsWith("SCAN_IP:")) && !cfg.IsScannerEnabled)
+        pending = null;
+
+    string command = "IDLE";
+    int commandId = 0;
     if (pending != null)
     {
-        pending.DeliveredAt = DateTime.UtcNow;
-        await db.SaveChangesAsync();
+        var deliveredAt = DateTime.UtcNow;
+        var claimed = await db.PendingAgentCommands
+            .Where(c => c.Id == pending.Id && c.AcknowledgedAt == null &&
+                (c.DeliveredAt == null || c.DeliveredAt <= leaseExpiredAt))
+            .ExecuteUpdateAsync(update => update
+                .SetProperty(c => c.DeliveredAt, deliveredAt)
+                .SetProperty(c => c.Attempts, c => c.Attempts + 1)
+                .SetProperty(c => c.Hostname, string.IsNullOrWhiteSpace(hostname) ? null : hostname));
+        if (claimed > 0)
+        {
+            command = pending.Command;
+            commandId = pending.Id;
+        }
     }
 
     var client = await db.Clients.FindAsync(clientId);
-    var cfg = new AgentRoleConfig();
-    if (!string.IsNullOrWhiteSpace(hostname))
-    {
-        var cHosts = agentConfigs.GetOrAdd(clientId, _ => new());
-        var isFirst = cHosts.IsEmpty;
-        cfg = cHosts.GetOrAdd(hostname, _ => new AgentRoleConfig { IsScannerEnabled = isFirst });
-    }
-
     return Results.Json(new {
         Command = command,
+        CommandId = commandId,
         IsScannerEnabled = cfg.IsScannerEnabled,
         IsSpoolerEnabled = cfg.IsSpoolerEnabled,
         NetworkSubnets = client?.NetworkSubnets ?? string.Empty,
@@ -578,6 +611,33 @@ app.MapGet("/api/agent/{clientId}/commands", async (int clientId, HttpRequest re
     });
 });
 
+app.MapPost("/api/agent/{clientId}/commands/{commandId:int}/ack", async (int clientId, int commandId, HttpRequest req, AppDbContext db) =>
+{
+    if (!int.TryParse(req.Headers["X-Agent-Client"], out var authenticatedClientId) || authenticatedClientId != clientId)
+        return Results.Forbid();
+
+    var command = await db.PendingAgentCommands.FirstOrDefaultAsync(c => c.Id == commandId && c.ClientId == clientId);
+    if (command == null) return Results.NotFound(new { message = "Comando não encontrado." });
+
+    using var reader = new StreamReader(req.Body);
+    var body = await reader.ReadToEndAsync();
+    using var doc = JsonDocument.Parse(body);
+    var succeeded = doc.RootElement.TryGetProperty("Succeeded", out var succeededElement) && succeededElement.GetBoolean();
+    if (succeeded)
+    {
+        command.AcknowledgedAt ??= DateTime.UtcNow;
+        command.LastError = null;
+    }
+    else
+    {
+        command.DeliveredAt = DateTime.UtcNow;
+        var error = doc.RootElement.TryGetProperty("Error", out var errorElement) ? errorElement.GetString() : null;
+        command.LastError = string.IsNullOrWhiteSpace(error) ? "Agent reported command failure." : error[..Math.Min(error.Length, 1000)];
+    }
+
+    await db.SaveChangesAsync();
+    return Results.Ok(new { acknowledged = succeeded });
+});
 // Update agent config
 app.MapPut("/api/agent/{clientId}/{hostname}/config", async (int clientId, string hostname, HttpRequest request) => {
     using var reader = new StreamReader(request.Body);
@@ -586,8 +646,7 @@ app.MapPut("/api/agent/{clientId}/{hostname}/config", async (int clientId, strin
     bool isScanner = doc.RootElement.GetProperty("isScannerEnabled").GetBoolean();
     bool isSpooler = doc.RootElement.GetProperty("isSpoolerEnabled").GetBoolean();
     
-    var configs = agentConfigs.GetOrAdd(clientId, _ => new());
-    var cfg = configs.GetOrAdd(hostname, _ => new AgentRoleConfig());
+    var cfg = GetOrCreateAgentRoleConfig(clientId, hostname);
     cfg.IsScannerEnabled = isScanner;
     cfg.IsSpoolerEnabled = isSpooler;
     return Results.Ok();
@@ -681,7 +740,17 @@ app.MapPost("/api/agent/report-job", async (HttpRequest request, AppDbContext db
     string userIp = doc.RootElement.TryGetProperty("UserIp",        out var ipP)? ipP.GetString() ?? "" : "";
     int pages     = doc.RootElement.TryGetProperty("TotalPages",    out var pP) ? pP.GetInt32() : 0;
 
-    var printer = await db.Printers.FirstOrDefaultAsync(p => p.ClientId == clientId && (p.Model == model || p.Model.Contains(model)));
+if (pages < 0) return Results.BadRequest(new { message = "TotalPages must be zero or greater." });
+    Printer? printer = null;
+    if (!string.IsNullOrWhiteSpace(model))
+    {
+        var candidates = await db.Printers
+            .Where(p => p.ClientId == clientId && p.Model.Contains(model.Trim()))
+            .Take(2)
+            .ToListAsync();
+        if (candidates.Count == 1)
+            printer = candidates[0];
+    }
 
     db.PrintJobs.Add(new PrintJob {
         ClientId = clientId,

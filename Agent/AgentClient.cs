@@ -52,6 +52,8 @@ namespace Agent
             }
 
             int heartbeatTick = 0;
+            int scanIntervalMinutes = 15;
+            DateTime nextAutomaticScanAt = DateTime.MinValue;
             while (!ct.IsCancellationRequested)
             {
                 try
@@ -75,6 +77,9 @@ namespace Agent
                     else if (doc.RootElement.TryGetProperty("command", out JsonElement cmdElLower))
                         command = cmdElLower.GetString() ?? "";
 
+                    int commandId = 0;
+                    if (doc.RootElement.TryGetProperty("CommandId", out JsonElement commandIdEl) || doc.RootElement.TryGetProperty("commandId", out commandIdEl))
+                        commandId = commandIdEl.GetInt32();
                     bool isScanner = false;
                     bool isSpooler = true;
                     if (doc.RootElement.TryGetProperty("IsScannerEnabled", out JsonElement scanEl)) isScanner = scanEl.GetBoolean();
@@ -83,6 +88,16 @@ namespace Agent
                         _snmpCommunity = communityEl.GetString() ?? "public";
                     if (doc.RootElement.TryGetProperty("NetworkSubnets", out JsonElement subnetsEl))
                         _networkSubnets = subnetsEl.GetString() ?? string.Empty;
+                    if (doc.RootElement.TryGetProperty("PollInterval", out JsonElement pollIntervalEl))
+                    {
+                        int configuredInterval = Math.Clamp(pollIntervalEl.GetInt32(), 1, 1440);
+                        if (configuredInterval != scanIntervalMinutes)
+                        {
+                            scanIntervalMinutes = configuredInterval;
+                            if (nextAutomaticScanAt != DateTime.MinValue)
+                                nextAutomaticScanAt = DateTime.UtcNow.AddMinutes(scanIntervalMinutes);
+                        }
+                    }
 
                     if (isSpooler && !SpoolerMonitor.IsRunning)
                         SpoolerMonitor.StartBackground(OnPrintJobArrived);
@@ -91,42 +106,23 @@ namespace Agent
 
                     if (command == "SCAN_NETWORK" || command.StartsWith("SCAN_IP:"))
                     {
-                        if (isScanner)
+                        if (isScanner && commandId > 0)
                         {
-                        string? customIp = command.StartsWith("SCAN_IP:") ? command.Substring("SCAN_IP:".Length).Trim() : null;
-                        Console.WriteLine($"[Agente] Recebido {command} — iniciando varredura...");
-                        if (Interlocked.CompareExchange(ref _scanInProgress, 1, 0) == 0)
-                        {
-                            _ = Task.Run(async () =>
-                            {
-                                try
-                                {
-                                    var scan = NetworkScanner.RunScannerDetailed(customIp, _snmpCommunity, _networkSubnets);
-                                    Console.WriteLine($"[Agente] {scan.Printers.Count} impressoras encontradas em {scan.ScannedIps.Count} endereços consultados.");
-                                    await ReportPrinters(scan);
-                                }
-                                catch (Exception ex)
-                                {
-                                    Console.WriteLine($"[Agente] Falha na varredura: {ex.Message}");
-                                }
-                                finally
-                                {
-                                    Volatile.Write(ref _scanInProgress, 0);
-                                }
-                            });
+                            string? customIp = command.StartsWith("SCAN_IP:") ? command.Substring("SCAN_IP:".Length).Trim() : null;
+                            Console.WriteLine($"[Agente] Recebido {command} — iniciando varredura...");
+                            if (StartBackgroundScan(customIp, commandId))
+                                nextAutomaticScanAt = DateTime.UtcNow.AddMinutes(scanIntervalMinutes);
+                            else
+                                Console.WriteLine("[Agente] Varredura ignorada: outra varredura ainda está em execução.");
                         }
-                        else
-                        {
-                            Console.WriteLine("[Agente] Varredura ignorada: outra varredura ainda está em execução.");
-                        }
-                        }
-                        else
+                        else if (!isScanner)
                         {
                             Console.WriteLine($"[Agente] Comando {command} ignorado (Scanner desativado neste nó).");
                         }
                     }
-                    else if (command == "UNINSTALL")
+                    else if (command == "UNINSTALL" && commandId > 0)
                     {
+                        await AcknowledgeCommand(commandId, true);
                         Console.WriteLine("[Agente] Comando de desinstalação recebido. Removendo...");
                         // Executa a própria desinstalação via linha de comando e encerra
                         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
@@ -137,6 +133,11 @@ namespace Agent
                         });
                         System.Windows.Forms.Application.Exit();
                         return;
+                    }
+                    if (isScanner && DateTime.UtcNow >= nextAutomaticScanAt)
+                    {
+                        if (StartBackgroundScan(null, 0))
+                            nextAutomaticScanAt = DateTime.UtcNow.AddMinutes(scanIntervalMinutes);
                     }
                 }
                 catch
@@ -199,13 +200,55 @@ namespace Agent
                         UserIp = userIp
                     };
                     string json = JsonSerializer.Serialize(payload);
-                    await _http.PostAsync($"{_serverUrl}/api/agent/report-job",
+                    using var response = await _http.PostAsync($"{_serverUrl}/api/agent/report-job",
                         new StringContent(json, Encoding.UTF8, "application/json"));
+                    response.EnsureSuccessStatusCode();
                 }
                 catch { }
             });
         }
 
+        private static bool StartBackgroundScan(string? customIp, int commandId)
+        {
+            if (Interlocked.CompareExchange(ref _scanInProgress, 1, 0) != 0)
+                return false;
+
+            _ = Task.Run(async () =>
+            {
+                bool succeeded = false;
+                string? scanError = null;
+                try
+                {
+                    var scan = NetworkScanner.RunScannerDetailed(customIp, _snmpCommunity, _networkSubnets);
+                    Console.WriteLine($"[Agente] {scan.Printers.Count} impressoras encontradas em {scan.ScannedIps.Count} endereços consultados.");
+                    await ReportPrinters(scan);
+                    succeeded = true;
+                }
+                catch (Exception ex)
+                {
+                    scanError = ex.Message;
+                    Console.WriteLine($"[Agente] Falha na varredura: {ex.Message}");
+                }
+                finally
+                {
+                    if (commandId > 0)
+                    {
+                        try { await AcknowledgeCommand(commandId, succeeded, scanError); }
+                        catch (Exception ex) { Console.WriteLine($"[Agente] Falha ao confirmar comando {commandId}: {ex.Message}"); }
+                    }
+                    Volatile.Write(ref _scanInProgress, 0);
+                }
+            });
+            return true;
+        }
+        private static async Task AcknowledgeCommand(int commandId, bool succeeded, string? error = null)
+        {
+            var payload = JsonSerializer.Serialize(new { Succeeded = succeeded, Error = error });
+            using var response = await _http.PostAsync(
+                $"{_serverUrl}/api/agent/{_clientId}/commands/{commandId}/ack",
+                new StringContent(payload, Encoding.UTF8, "application/json"));
+            response.EnsureSuccessStatusCode();
+        }
         private static void ConfigureAgentHeaders()
         {
             _http.DefaultRequestHeaders.Remove("X-Agent-Client");

@@ -70,6 +70,9 @@ namespace ServerMock.Models
         public string? Hostname { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? DeliveredAt { get; set; }
+        public DateTime? AcknowledgedAt { get; set; }
+        public int Attempts { get; set; }
+        public string? LastError { get; set; }
     }
 
     public class UserQuota
