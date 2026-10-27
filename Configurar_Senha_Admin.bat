@@ -11,7 +11,7 @@ if not exist "%SCRIPT%" (
 powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File "%SCRIPT%"
 if errorlevel 1 (
   echo.
-  echo O configurador encontrou um erro. Leia a mensagem acima e confirme se o .NET Framework do Windows esta disponivel.
+  echo O configurador encontrou um erro. Leia a mensagem acima e confira se o Windows permitiu executar o arquivo e se o caminho esta acessivel.
   pause
   exit /b 1
 )

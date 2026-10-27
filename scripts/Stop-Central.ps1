@@ -1,4 +1,4 @@
-$port = if ($env:PRINT_CONTROL_PORT) { [int]$env:PRINT_CONTROL_PORT } else { 5000 }
+﻿$port = if ($env:PRINT_CONTROL_PORT) { [int]$env:PRINT_CONTROL_PORT } else { 5000 }
 $listeners = Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue |
   Select-Object -ExpandProperty OwningProcess -Unique
 
