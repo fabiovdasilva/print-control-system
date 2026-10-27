@@ -1,8 +1,8 @@
 @echo off
+setlocal
 title Parando o Sistema
-echo Encerrando serviços em segundo plano...
-taskkill /F /IM node.exe >nul 2>&1
-taskkill /F /IM dotnet.exe >nul 2>&1
-taskkill /F /IM Agent.exe >nul 2>&1
-echo Serviços encerrados!
+echo Encerrando apenas a central PrintFlow na porta 5000...
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$pids = Get-NetTCPConnection -State Listen -LocalPort 5000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; foreach ($processId in $pids) { Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue }"
+echo Central encerrada. O PrintControl na porta 5001 e os agentes continuam ativos.
 timeout /t 2 >nul
+endlocal
