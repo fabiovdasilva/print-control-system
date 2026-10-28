@@ -8,9 +8,10 @@ interface AppLayoutProps {
   breadcrumbs?: Crumb[];
   agentStatus?: { label: string; status: "online" | "unstable" | "offline" };
   actions?: ReactNode;
+  loadClientContext?: boolean;
 }
 
-export function AppLayout({ children, breadcrumbs, agentStatus, actions }: AppLayoutProps) {
+export function AppLayout({ children, breadcrumbs, agentStatus, actions, loadClientContext = true }: AppLayoutProps) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const closeMobileNav = () => {
@@ -26,7 +27,7 @@ export function AppLayout({ children, breadcrumbs, agentStatus, actions }: AppLa
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content">Pular para o conteúdo</a>
-      <AppSidebar id="app-sidebar" open={mobileNavOpen} onClose={closeMobileNav} />
+      <AppSidebar id="app-sidebar" open={mobileNavOpen} onClose={closeMobileNav} loadClientContext={loadClientContext} />
       {mobileNavOpen ? <button className="app-nav-scrim" type="button" aria-label="Fechar menu" onClick={closeMobileNav} /> : null}
       <div className="app-main">
         <header className="app-topbar">

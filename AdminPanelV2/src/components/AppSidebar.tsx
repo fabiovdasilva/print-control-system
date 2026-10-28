@@ -20,11 +20,11 @@ const systemNav = [
   { to: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 
-export function AppSidebar({ id, open, onClose }: { id: string; open: boolean; onClose: () => void }) {
+export function AppSidebar({ id, open, onClose, loadClientContext = true }: { id: string; open: boolean; onClose: () => void; loadClientContext?: boolean }) {
   const [mobileViewport, setMobileViewport] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const navigate = useNavigate();
-  const { data: dashboard } = useQuery({ queryKey: ["dashboard"], queryFn: fetchDashboardTotals });
+  const { data: dashboard } = useQuery({ queryKey: ["dashboard"], queryFn: fetchDashboardTotals, enabled: loadClientContext });
   const clients = dashboard?.clients ?? [];
   const alertCount = dashboard?.totals?.alerts ?? 0;
   const currentClient = clients.find((client: any) => pathname.startsWith(`/clientes/${client.id}`));
