@@ -141,7 +141,7 @@ function RootComponent() {
 }
 
 function AdminPasswordGate({ children }: { children: ReactNode }) {
-  const [password, setPassword] = React.useState("");
+  const passwordInputRef = React.useRef<HTMLInputElement>(null);
   const [showPassword, setShowPassword] = React.useState(false);
   const [authenticated, setAuthenticated] = React.useState(false);
   const [checking, setChecking] = React.useState(true);
@@ -167,12 +167,12 @@ function AdminPasswordGate({ children }: { children: ReactNode }) {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password: passwordInputRef.current?.value ?? "" }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.message || "Não foi possível entrar.");
       setAuthenticated(true);
-      setPassword("");
+      if (passwordInputRef.current) passwordInputRef.current.value = "";
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível entrar.");
     } finally {
@@ -195,10 +195,9 @@ function AdminPasswordGate({ children }: { children: ReactNode }) {
         <div className="relative mt-2">
           <input
             id="admin-password"
+            ref={passwordInputRef}
             type={showPassword ? "text" : "password"}
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            autoComplete="off"
             className="w-full rounded-lg border border-input bg-background px-3 py-2 pr-11 text-sm outline-none focus:ring-2 focus:ring-ring"
             required
           />
