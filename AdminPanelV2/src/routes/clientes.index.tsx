@@ -1,10 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppLayout, EmptyState, PageTitle, Panel } from "@/components/AppLayout";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { API_BASE, adminFetch, fetchDashboardTotals } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { fetchDashboardTotals } from "@/lib/api";
 import { Building2, Plus, Search } from "lucide-react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 export const Route = createFileRoute("/clientes/")({
   head: () => ({
@@ -18,24 +17,6 @@ export const Route = createFileRoute("/clientes/")({
 
 function Page() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [showCreate, setShowCreate] = useState(false);
-  const [newClient, setNewClient] = useState({ name: "", doc: "", email: "", phone: "", address: "", networkSubnets: "", snmpCommunity: "public", pollInterval: 15 });
-  const queryClient = useQueryClient();
-  const createClient = useMutation({
-    mutationFn: async () => {
-      const response = await adminFetch(`${API_BASE}/clients`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newClient) });
-      return response.json();
-    },
-    onSuccess: () => {
-      toast.success("Cliente cadastrado.");
-      setShowCreate(false);
-      setNewClient({ name: "", doc: "", email: "", phone: "", address: "", networkSubnets: "", snmpCommunity: "public", pollInterval: 15 });
-      // The registration is already confirmed. Refresh the summary in the
-      // background so an intermittent dashboard request cannot trap the form.
-      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-    },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "Falha ao cadastrar cliente."),
-  });
   const { data: dashboard, isLoading, error, refetch } = useQuery({
     queryKey: ['dashboard'],
     queryFn: fetchDashboardTotals,
@@ -73,24 +54,11 @@ function Page() {
         title="Clientes"
         subtitle={`${clients.length} clientes cadastrados na central.`}
         right={
-          <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+          <Link to="/clientes/novo" className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
             <Plus className="size-4" /> Novo cliente
-          </button>
+          </Link>
         }
       />
-
-      {showCreate ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowCreate(false); }}>
-          <form className="w-full max-w-2xl rounded-2xl border border-border bg-card p-6 shadow-xl" role="dialog" aria-modal="true" aria-labelledby="new-client-title" onSubmit={(event) => { event.preventDefault(); createClient.mutate(); }}>
-            <h2 id="new-client-title" className="text-lg font-semibold">Cadastrar cliente</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Defina os dados e a faixa de rede que o agente vai consultar.</p>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              {[{key:"name",label:"Nome",required:true},{key:"doc",label:"CNPJ / código"},{key:"email",label:"E-mail"},{key:"phone",label:"Telefone"},{key:"address",label:"Endereço"},{key:"networkSubnets",label:"Sub-redes (CIDR, separadas por vírgula)"},{key:"snmpCommunity",label:"Comunidade SNMP"},{key:"pollInterval",label:"Intervalo de leitura (minutos)"}].map(({key,label,required}) => <label key={key} className="text-sm font-medium">{label}<input required={required} type={key === "pollInterval" ? "number" : "text"} min={key === "pollInterval" ? 1 : undefined} value={newClient[key as keyof typeof newClient]} onChange={(event) => setNewClient((value) => ({...value,[key]: key === "pollInterval" ? Number(event.target.value) : event.target.value}))} className="mt-1.5 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" /></label>)}
-            </div>
-            <div className="mt-6 flex justify-end gap-3"><button type="button" onClick={() => setShowCreate(false)} className="rounded-lg border border-border px-4 py-2 text-sm">Cancelar</button><button type="submit" disabled={createClient.isPending} className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60">{createClient.isPending ? "Salvando…" : "Cadastrar cliente"}</button></div>
-          </form>
-        </div>
-      ) : null}
 
       <Panel
         right={
@@ -121,7 +89,7 @@ function Page() {
             </thead>
             <tbody className="divide-y divide-border">
               {filteredClients.length === 0 ? (
-                <tr><td colSpan={6}><EmptyState icon={<Building2 size={20} />} title={clients.length === 0 ? "Cadastre seu primeiro cliente" : "Nenhum cliente encontrado"} description={clients.length === 0 ? "Adicione uma empresa para organizar impressoras e agentes." : "Tente outro nome ou código, ou limpe a busca."} action={clients.length === 0 ? <button type="button" onClick={() => setShowCreate(true)} className="min-h-10 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground">Cadastrar cliente</button> : <button type="button" onClick={() => setSearchTerm("")} className="min-h-10 rounded-lg border border-border px-4 text-sm font-semibold">Limpar busca</button>} /></td></tr>
+                <tr><td colSpan={6}><EmptyState icon={<Building2 size={20} />} title={clients.length === 0 ? "Cadastre seu primeiro cliente" : "Nenhum cliente encontrado"} description={clients.length === 0 ? "Adicione uma empresa para organizar impressoras e agentes." : "Tente outro nome ou código, ou limpe a busca."} action={clients.length === 0 ? <Link to="/clientes/novo" className="inline-flex min-h-10 items-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground">Cadastrar cliente</Link> : <button type="button" onClick={() => setSearchTerm("")} className="min-h-10 rounded-lg border border-border px-4 text-sm font-semibold">Limpar busca</button>} /></td></tr>
               ) : filteredClients.map((c: any) => (
                 <tr key={c.id} className="hover:bg-muted/30">
                   <td className="px-6 py-4">
