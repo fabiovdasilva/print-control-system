@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { AppLayout, PageTitle, Panel } from "@/components/AppLayout";
+import { AppLayout, EmptyState, PageTitle, Panel } from "@/components/AppLayout";
 import { StatusPill, TonerCMYK } from "@/components/StatusPill";
 import { useQuery } from "@tanstack/react-query";
 import { fetchDashboardTotals } from "@/lib/api";
-import { Search } from "lucide-react";
+import { Search, Printer } from "lucide-react";
 import { useState } from "react";
 
 export const Route = createFileRoute("/impressoras")({
@@ -48,6 +48,7 @@ function Page() {
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <input
+              aria-label="Filtrar impressoras por modelo, endereço IP ou cliente"
               placeholder="Filtrar por modelo, IP ou cliente..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
@@ -69,7 +70,9 @@ function Page() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filteredPrinters.map((p: any) => {
+              {filteredPrinters.length === 0 ? (
+                <tr><td colSpan={6}><EmptyState icon={<Printer size={20} />} title={printers.length === 0 ? "Nenhuma impressora recebida" : "Nenhuma impressora encontrada"} description={printers.length === 0 ? "Cadastre um cliente e conecte o agente para receber dispositivos." : "Altere o filtro de busca para encontrar outra impressora."} /></td></tr>
+              ) : filteredPrinters.map((p: any) => {
                 return (
                   <tr key={p.id} className="hover:bg-muted/30">
                     <td className="px-6 py-4">

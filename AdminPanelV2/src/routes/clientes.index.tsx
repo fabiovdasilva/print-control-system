@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { AppLayout, PageTitle, Panel } from "@/components/AppLayout";
+import { AppLayout, EmptyState, PageTitle, Panel } from "@/components/AppLayout";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_BASE, adminFetch, fetchDashboardTotals } from "@/lib/api";
 import { Building2, Plus, Search } from "lucide-react";
@@ -95,6 +95,7 @@ function Page() {
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <input
+              aria-label="Buscar clientes por nome ou CNPJ"
               placeholder="Buscar por nome ou CNPJ..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
@@ -117,7 +118,9 @@ function Page() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filteredClients.map((c: any) => (
+              {filteredClients.length === 0 ? (
+                <tr><td colSpan={6}><EmptyState icon={<Building2 size={20} />} title={clients.length === 0 ? "Cadastre seu primeiro cliente" : "Nenhum cliente encontrado"} description={clients.length === 0 ? "Adicione uma empresa para organizar impressoras e agentes." : "Tente outro nome ou código, ou limpe a busca."} action={clients.length === 0 ? <button type="button" onClick={() => setShowCreate(true)} className="min-h-10 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground">Cadastrar cliente</button> : <button type="button" onClick={() => setSearchTerm("")} className="min-h-10 rounded-lg border border-border px-4 text-sm font-semibold">Limpar busca</button>} /></td></tr>
+              ) : filteredClients.map((c: any) => (
                 <tr key={c.id} className="hover:bg-muted/30">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">

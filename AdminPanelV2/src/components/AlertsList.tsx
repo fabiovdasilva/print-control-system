@@ -1,4 +1,7 @@
 import { cn } from "@/lib/utils";
+import { EmptyState } from "@/components/AppLayout";
+import { CircleCheck } from "lucide-react";
+
 export type Alert = { id: number | string; severity: "error" | "warning" | "info"; title: string; description: string; time: string; ago: string };
 
 const sevStyle: Record<Alert["severity"], { bg: string; dot: string; title: string; desc: string }> = {
@@ -8,21 +11,23 @@ const sevStyle: Record<Alert["severity"], { bg: string; dot: string; title: stri
 };
 
 export function AlertsList({ alerts, compact = false }: { alerts: Alert[]; compact?: boolean }) {
+  if (alerts.length === 0) {
+    return <EmptyState icon={<CircleCheck size={20} />} title="Nenhum alerta ativo" description="As impressoras estão sem ocorrências que precisem de atenção." className="alerts-empty-state" />;
+  }
+
   return (
     <div className={cn("space-y-3", compact && "space-y-2")}>
-      {alerts.map((a) => {
-        const s = sevStyle[a.severity];
+      {alerts.map((alert) => {
+        const style = sevStyle[alert.severity];
         return (
-          <div key={a.id} className={cn("flex items-start gap-3 rounded-lg p-3", s.bg)}>
-            <div className={cn("mt-1.5 size-2 shrink-0 rounded-full", s.dot)} />
+          <article key={alert.id} className={cn("alert-list-item", style.bg)}>
+            <span className={cn("alert-list-dot", style.dot)} aria-hidden="true" />
             <div className="min-w-0 flex-1">
-              <p className={cn("text-xs font-bold", s.title)}>{a.title}</p>
-              <p className={cn("text-[11px]", s.desc)}>{a.description}</p>
-              <p className="mt-1 text-[10px] text-muted-foreground/70">
-                {a.time} • {a.ago}
-              </p>
+              <p className={cn("text-xs font-bold", style.title)}>{alert.title}</p>
+              <p className={cn("text-[11px]", style.desc)}>{alert.description}</p>
+              <p className="mt-1 text-[10px] text-muted-foreground/70">{alert.time} • {alert.ago}</p>
             </div>
-          </div>
+          </article>
         );
       })}
     </div>

@@ -1,163 +1,141 @@
+import { useEffect, useState } from "react";
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import {
-  LayoutDashboard,
-  Building2,
-  Printer,
-  AlertTriangle,
-  FileBarChart,
-  Cpu,
-  Settings,
-  ChevronDown,
+  LayoutDashboard, Building2, Printer, AlertTriangle, FileBarChart,
+  Cpu, Settings, ChevronDown, ShieldCheck, Server, Activity,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchDashboardTotals } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const mainNav = [
-  { to: "/", label: "Dashboard Geral", icon: LayoutDashboard, exact: true },
+  { to: "/", label: "Visão geral", icon: LayoutDashboard, exact: true },
   { to: "/clientes", label: "Clientes", icon: Building2 },
   { to: "/impressoras", label: "Impressoras", icon: Printer },
-  { to: "/alertas", label: "Alertas", icon: AlertTriangle, badge: 0 },
+  { to: "/alertas", label: "Alertas", icon: AlertTriangle },
   { to: "/relatorios", label: "Relatórios", icon: FileBarChart },
 ];
-
 const systemNav = [
   { to: "/agentes", label: "Agentes", icon: Cpu },
-  { to: "/configuracoes", label: "Configurações Globais", icon: Settings },
+  { to: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 
-export function AppSidebar() {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
+export function AppSidebar({ id, open, onClose }: { id: string; open: boolean; onClose: () => void }) {
+  const [mobileViewport, setMobileViewport] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches);
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const navigate = useNavigate();
+  const { data: dashboard } = useQuery({ queryKey: ["dashboard"], queryFn: fetchDashboardTotals });
+  const clients = dashboard?.clients ?? [];
+  const alertCount = dashboard?.totals?.alerts ?? 0;
+  const currentClient = clients.find((client: any) => pathname.startsWith(`/clientes/${client.id}`));
 
-  const { data: dashboard } = useQuery({
-    queryKey: ['dashboard'],
-    queryFn: fetchDashboardTotals
-  });
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 1023px)");
+    const updateViewport = () => setMobileViewport(media.matches);
+    media.addEventListener("change", updateViewport);
+    return () => media.removeEventListener("change", updateViewport);
+  }, []);
 
-  const clients = dashboard?.clients || [];
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = Array.from(document.querySelectorAll<HTMLElement>("#app-sidebar a[href], #app-sidebar button:not(:disabled), #app-sidebar select:not(:disabled)"));
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
 
-  const isActive = (to: string, exact?: boolean) =>
-    exact ? pathname === to : pathname === to || pathname.startsWith(to + "/");
-
-  const currentClient = clients.find((c: any) => pathname.startsWith(`/clientes/${c.id}`));
+  const isActive = (to: string, exact?: boolean) => exact ? pathname === to : pathname === to || pathname.startsWith(`${to}/`);
+  const navLinkClass = (active: boolean) => cn("sidebar-link", active && "sidebar-link--active");
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground">
-      <div className="p-6">
-        <Link to="/" className="flex items-center gap-3">
-          <div className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground font-bold">
-            P
-          </div>
-          <span className="text-xl font-bold tracking-tight text-white">PrintFlow</span>
+    <aside
+      id={id}
+      className={cn("app-sidebar", open && "app-sidebar--open")}
+      aria-label="Navegação principal"
+      aria-hidden={mobileViewport && !open ? true : undefined}
+      aria-modal={mobileViewport && open ? true : undefined}
+      role={mobileViewport && open ? "dialog" : undefined}
+      inert={mobileViewport && !open ? true : undefined}
+    >
+      <div className="sidebar-brand-row">
+        <Link to="/" onClick={onClose} className="sidebar-brand" aria-label="PrintFlow — visão geral">
+          <span className="sidebar-brand-mark" aria-hidden="true">P</span>
+          <span className="sidebar-brand-copy"><strong>PrintFlow</strong><small>MONITORAMENTO</small></span>
         </Link>
       </div>
-
-      <nav className="flex-1 space-y-1 px-4">
-        <div className="mb-2 px-2 text-[11px] font-bold uppercase tracking-wider text-sidebar-muted">
-          Operador
-        </div>
-        {mainNav.map((item) => {
-          const active = isActive(item.to, item.exact);
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.to}
-              to={item.to}
-              className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-                active
-                  ? "bg-sidebar-active text-white font-medium"
-                  : "text-slate-400 hover:bg-sidebar-active/60 hover:text-white",
-              )}
-            >
-              <Icon className="size-4" />
-              <span className="flex-1 truncate">{item.label}</span>
-              {item.badge ? (
-                <span className="rounded bg-danger px-1.5 py-px text-[10px] font-bold text-white">
-                  {item.badge}
-                </span>
-              ) : null}
-            </Link>
-          );
-        })}
-
-        <div className="mt-8 mb-2 px-2 text-[11px] font-bold uppercase tracking-wider text-sidebar-muted">
-          Cliente Atual
-        </div>
-        <div className="relative">
-          <select
-            value={currentClient?.id ?? ""}
-            onChange={(e) => {
-              if (e.target.value) navigate({ to: "/clientes/$clientId", params: { clientId: e.target.value } });
-            }}
-            className="w-full appearance-none rounded-md bg-sidebar-active px-3 py-2 pr-8 text-sm text-white outline-none focus:ring-2 focus:ring-primary"
-          >
-            <option value="">Selecionar cliente...</option>
-            {clients.map((c: any) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-        </div>
-
-        {currentClient ? (
-          <div className="mt-4 space-y-1">
-            {[
-              { tab: "dashboard", label: "Frota e Status" },
-              { tab: "relatorios", label: "Relatórios de Uso" },
-              { tab: "rede", label: "Agente e Rede" },
-              { tab: "config", label: "Configurações" },
-            ].map((s) => (
-              <Link
-                key={s.tab}
-                to="/clientes/$clientId"
-                params={{ clientId: currentClient.id }}
-                search={{ tab: s.tab }}
-                className="block rounded-md px-3 py-2 text-sm text-slate-400 hover:bg-white/5 hover:text-white"
-              >
-                {s.label}
+      <nav className="sidebar-navigation">
+        <p className="sidebar-section-label">Operação</p>
+        <div className="sidebar-link-list">
+          {mainNav.map((item) => {
+            const active = isActive(item.to, item.exact);
+            const Icon = item.icon;
+            return (
+              <Link key={item.to} to={item.to} onClick={onClose} className={navLinkClass(active)} aria-current={active ? "page" : undefined}>
+                <Icon className="sidebar-link-icon" size={18} aria-hidden="true" />
+                <span className="sidebar-link-label">{item.label}</span>
+                {item.to === "/alertas" && alertCount > 0 ? <span className="sidebar-count">{alertCount > 99 ? "99+" : alertCount}</span> : null}
               </Link>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="mt-8 mb-2 px-2 text-[11px] font-bold uppercase tracking-wider text-sidebar-muted">
-          Sistema
+            );
+          })}
         </div>
-        {systemNav.map((item) => {
-          const active = isActive(item.to);
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.to}
-              to={item.to}
-              className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-                active
-                  ? "bg-sidebar-active text-white font-medium"
-                  : "text-slate-400 hover:bg-sidebar-active/60 hover:text-white",
-              )}
+        <div className="sidebar-client-context">
+          <label className="sidebar-section-label" htmlFor="sidebar-client">Cliente selecionado</label>
+          <div className="sidebar-select-wrap">
+            <select
+              id="sidebar-client"
+              value={currentClient?.id ?? ""}
+              onChange={(event) => {
+                if (event.target.value) navigate({ to: "/clientes/$clientId", params: { clientId: event.target.value } });
+              }}
+              className="sidebar-client-select"
             >
-              <Icon className="size-4" />
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
-
-      <div className="border-t border-sidebar-border p-4">
-        <div className="flex items-center gap-3">
-          <div className="grid size-8 place-items-center rounded-full bg-slate-700 text-xs font-bold text-white">
-            RS
+              <option value="">Todos os clientes</option>
+              {clients.map((client: any) => <option key={client.id} value={client.id}>{client.name}</option>)}
+            </select>
+            <ChevronDown className="sidebar-select-chevron" size={16} aria-hidden="true" />
           </div>
-          <div className="min-w-0 overflow-hidden">
-            <p className="truncate text-sm font-medium text-white">Ricardo Silva</p>
-            <p className="truncate text-xs text-sidebar-muted">Operador Senior</p>
-          </div>
+          {currentClient ? (
+            <div className="sidebar-client-shortcuts">
+              {[
+                { tab: "dashboard", label: "Resumo", icon: Activity },
+                { tab: "relatorios", label: "Uso e relatórios", icon: FileBarChart },
+                { tab: "rede", label: "Agente e rede", icon: Server },
+                { tab: "config", label: "Preferências", icon: Settings },
+              ].map((item) => {
+                const Icon = item.icon;
+                return <Link key={item.tab} to="/clientes/$clientId" params={{ clientId: currentClient.id }} search={{ tab: item.tab }} onClick={onClose} className="sidebar-sub-link"><Icon size={15} aria-hidden="true" />{item.label}</Link>;
+              })}
+            </div>
+          ) : null}
         </div>
+        <p className="sidebar-section-label sidebar-section-label--system">Sistema</p>
+        <div className="sidebar-link-list">
+          {systemNav.map((item) => {
+            const active = isActive(item.to);
+            const Icon = item.icon;
+            return <Link key={item.to} to={item.to} onClick={onClose} className={navLinkClass(active)} aria-current={active ? "page" : undefined}><Icon className="sidebar-link-icon" size={18} aria-hidden="true" /><span className="sidebar-link-label">{item.label}</span></Link>;
+          })}
+        </div>
+      </nav>
+      <div className="sidebar-account">
+        <span className="sidebar-account-icon"><ShieldCheck size={18} aria-hidden="true" /></span>
+        <span className="sidebar-account-copy"><strong>Central protegida</strong><small>Administrador</small></span>
       </div>
     </aside>
   );

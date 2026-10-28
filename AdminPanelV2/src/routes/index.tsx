@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { AppLayout, KpiCard, PageTitle, Panel } from "@/components/AppLayout";
+import { AppLayout, EmptyState, KpiCard, PageTitle, Panel } from "@/components/AppLayout";
 import { lazy, Suspense } from "react";
 import { AlertsList } from "@/components/AlertsList";
 import { useQuery } from "@tanstack/react-query";
@@ -71,7 +71,8 @@ pagesToday: cPrinters.reduce((acc: number, p: any) => acc + (p.pagesToday || 0),
     >
       <PageTitle
         title="Dashboard Geral"
-        subtitle="Visão consolidada de toda a operação — clientes, impressoras e alertas em tempo real."
+        subtitle="Visão consolidada da frota, clientes e ocorrências da central."
+        right={<Link to="/clientes" className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"><Building2 className="size-4" aria-hidden="true" />Adicionar cliente</Link>}
       />
 
       <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -86,6 +87,17 @@ pagesToday: cPrinters.reduce((acc: number, p: any) => acc + (p.pagesToday || 0),
         <KpiCard label="Offline / Erro" value={offline} hint="Chamados" accent="danger" />
       </div>
 
+      {clients.length === 0 ? (
+        <section className="setup-card mb-8">
+          <span className="setup-card-icon"><Building2 size={22} aria-hidden="true" /></span>
+          <div className="setup-card-copy">
+            <p className="setup-card-eyebrow">PRIMEIROS PASSOS</p>
+            <h2>Cadastre o primeiro cliente</h2>
+            <p>Depois, crie o agente deste cliente para começar a receber impressoras, status e leituras.</p>
+          </div>
+          <Link to="/clientes" className="setup-action">Começar cadastro <ArrowRight size={15} aria-hidden="true" /></Link>
+        </section>
+      ) : null}
       <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Panel
           title="Volume Consolidado de Impressão"
@@ -132,7 +144,9 @@ pagesToday: cPrinters.reduce((acc: number, p: any) => acc + (p.pagesToday || 0),
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {uiClients.map((c: any) => (
+              {uiClients.length === 0 ? (
+                <tr><td colSpan={7}><EmptyState icon={<Building2 size={20} />} title="Nenhum cliente cadastrado" description="Cadastre uma empresa para começar a acompanhar sua frota de impressão." action={<Link to="/clientes" className="text-sm font-semibold text-primary hover:underline">Abrir clientes</Link>} /></td></tr>
+              ) : uiClients.map((c: any) => (
                 <tr key={c.id} className="hover:bg-muted/30">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">

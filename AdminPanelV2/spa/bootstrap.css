@@ -1,20 +1,24 @@
-:root { color-scheme: light; font-family: Inter, "Segoe UI", Arial, sans-serif; color: #111827; background: #f5f7fb; font-synthesis: none; }
+:root { color-scheme: light; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #162235; background: #f4f7fb; font-synthesis: none; }
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; min-height: 100vh; }
 button, input { font: inherit; }
-.login-screen { display: grid; min-height: 100vh; place-items: center; padding: 24px; }
-.login-card { width: min(100%, 448px); padding: 32px; border: 1px solid #e0e5ee; border-radius: 18px; background: #fff; box-shadow: 0 12px 28px rgb(15 23 42 / 10%); }
-.brand-mark { display: grid; width: 44px; height: 44px; margin-bottom: 20px; place-items: center; border-radius: 12px; background: #2860e8; color: #fff; font-size: 19px; font-weight: 700; }
-h1 { margin: 0; font-size: 20px; line-height: 1.35; font-weight: 650; }
-.intro { margin: 8px 0 24px; color: #64748b; font-size: 14px; line-height: 1.5; }
-label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 550; }
-.password-row { display: flex; overflow: hidden; border: 2px solid #2860e8; border-radius: 11px; background: #fff; }
-.password-row:focus-within { box-shadow: 0 0 0 3px rgb(40 96 232 / 13%); }
-.password-row input { width: 100%; min-width: 0; height: 40px; padding: 0 12px; border: 0; outline: 0; background: transparent; color: #111827; font-size: 16px; }
-.visibility-button { padding: 0 12px; border: 0; background: transparent; color: #64748b; cursor: pointer; font-size: 12px; }
-.hint { margin: 8px 0 0; color: #64748b; font-size: 12px; }
-.error-message { margin: 12px 0 0; color: #b42318; font-size: 13px; line-height: 1.4; }
-.submit-button { width: 100%; min-height: 40px; margin-top: 18px; border: 0; border-radius: 10px; background: #2860e8; color: #fff; cursor: pointer; font-size: 14px; font-weight: 650; }
-.submit-button:disabled { cursor: wait; opacity: .7; }
-.loading-message { color: #64748b; font-size: 14px; }
-@media (max-width: 480px) { .login-card { padding: 26px 22px; } }
+.login-screen { position: relative; display: grid; min-height: 100vh; place-items: center; overflow: hidden; padding: 24px; background: radial-gradient(ellipse at 10% 0%, rgb(36 87 214 / 8%), transparent 42%), #f4f7fb; }
+.login-card { position: relative; width: min(100%, 448px); padding: 34px; border: 1px solid #e0e7ef; border-radius: 18px; background: #fff; box-shadow: 0 20px 54px rgb(16 35 62 / 10%), 0 2px 7px rgb(16 35 62 / 4%); }
+.brand-mark { display: grid; width: 44px; height: 44px; margin-bottom: 22px; place-items: center; border-radius: 12px; background: #2457d6; color: #fff; font-size: 19px; font-weight: 750; box-shadow: 0 6px 14px rgb(36 87 214 / 22%); }
+h1 { margin: 0; color: #162235; font-size: 21px; line-height: 1.35; font-weight: 700; letter-spacing: -.025em; }
+.intro { margin: 8px 0 26px; color: #607086; font-size: 14px; line-height: 1.55; }
+label { display: block; margin-bottom: 8px; color: #26364d; font-size: 13px; font-weight: 650; }
+.password-row { display: flex; min-height: 48px; overflow: hidden; border: 1px solid #cbd6e3; border-radius: 10px; background: #fff; }
+.password-row:focus-within { border-color: #2457d6; box-shadow: 0 0 0 3px rgb(36 87 214 / 14%); }
+.password-row input { width: 100%; min-width: 0; min-height: 46px; padding: 0 13px; border: 0; outline: 0; background: transparent; color: #162235; font-size: 16px; }
+.visibility-button { min-width: 66px; min-height: 46px; padding: 0 12px; border: 0; background: transparent; color: #53657d; cursor: pointer; font-size: 12px; font-weight: 600; }
+.visibility-button:hover { color: #2457d6; }
+.hint { margin: 9px 0 0; color: #718096; font-size: 12px; line-height: 1.45; }
+.error-message { margin: 13px 0 0; color: #b42318; font-size: 13px; line-height: 1.45; }
+.submit-button { width: 100%; min-height: 48px; margin-top: 20px; border: 0; border-radius: 10px; background: #2457d6; color: #fff; cursor: pointer; font-size: 14px; font-weight: 680; transition: background 140ms ease, box-shadow 140ms ease; }
+.submit-button:hover { background: #1d49bb; box-shadow: 0 5px 14px rgb(36 87 214 / 20%); }
+.submit-button:focus-visible, .visibility-button:focus-visible { outline: 3px solid #82aaff; outline-offset: 2px; }
+.submit-button:disabled { cursor: wait; opacity: .72; }
+.loading-message { color: #607086; font-size: 14px; }
+@media (max-width: 480px) { .login-card { padding: 27px 23px; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; } }

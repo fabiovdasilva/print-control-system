@@ -1,139 +1,138 @@
-import type { ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
+import { Menu, X, ChevronRight } from "lucide-react";
 import { AppSidebar } from "./AppSidebar";
 
-interface Crumb {
-  label: string;
-  to?: string;
-}
-
+interface Crumb { label: string; to?: string }
 interface AppLayoutProps {
   children: ReactNode;
   breadcrumbs?: Crumb[];
-  agentStatus?: {
-    label: string;
-    status: "online" | "unstable" | "offline";
-  };
+  agentStatus?: { label: string; status: "online" | "unstable" | "offline" };
   actions?: ReactNode;
 }
 
 export function AppLayout({ children, breadcrumbs, agentStatus, actions }: AppLayoutProps) {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const closeMobileNav = () => {
+    setMobileNavOpen(false);
+    window.requestAnimationFrame(() => menuButtonRef.current?.focus());
+  };
+  const openMobileNav = () => {
+    setMobileNavOpen(true);
+    window.requestAnimationFrame(() => document.querySelector<HTMLElement>("#app-sidebar nav a")?.focus());
+  };
+  const statusLabel = agentStatus?.status === "online" ? "Operação saudável" : agentStatus?.status === "unstable" ? "Atenção necessária" : "Agentes offline";
+
   return (
-    <div className="flex min-h-screen bg-background">
-      <AppSidebar />
-      <main className="flex-1 overflow-x-hidden">
-        <header className="flex h-16 items-center justify-between border-b border-border bg-card px-8">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            {breadcrumbs?.map((c, i) => (
-              <span key={i} className="flex items-center gap-2">
-                {i > 0 ? <span>/</span> : null}
-                <span
-                  className={
-                    i === breadcrumbs.length - 1 ? "font-medium text-foreground" : "text-muted-foreground"
-                  }
-                >
-                  {c.label}
-                </span>
+    <div className="app-shell">
+      <a className="skip-link" href="#main-content">Pular para o conteúdo</a>
+      <AppSidebar id="app-sidebar" open={mobileNavOpen} onClose={closeMobileNav} />
+      {mobileNavOpen ? <button className="app-nav-scrim" type="button" aria-label="Fechar menu" onClick={closeMobileNav} /> : null}
+      <div className="app-main">
+        <header className="app-topbar">
+          <button
+            ref={menuButtonRef}
+            type="button"
+            className="app-menu-button"
+            aria-label={mobileNavOpen ? "Fechar navegação" : "Abrir navegação"}
+            aria-expanded={mobileNavOpen}
+            aria-controls="app-sidebar"
+            onClick={() => mobileNavOpen ? closeMobileNav() : openMobileNav()}
+          >
+            {mobileNavOpen ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}
+          </button>
+          <nav className="app-breadcrumbs" aria-label="Localização">
+            {breadcrumbs?.length ? breadcrumbs.map((crumb, index) => (
+              <span key={`${crumb.label}-${index}`} className="app-crumb">
+                {index > 0 ? <ChevronRight size={14} aria-hidden="true" /> : null}
+                <span aria-current={index === breadcrumbs.length - 1 ? "page" : undefined}>{crumb.label}</span>
               </span>
-            ))}
-          </div>
-          <div className="flex items-center gap-4">
+            )) : <span className="app-crumb-current">Central PrintFlow</span>}
+          </nav>
+          <div className="app-topbar-right">
             {agentStatus ? (
-              <div className="flex items-center gap-2 rounded-full bg-muted px-3 py-1.5">
-                <span
-                  className={`size-2 rounded-full ${
-                    agentStatus.status === "online"
-                      ? "bg-success"
-                      : agentStatus.status === "unstable"
-                        ? "bg-warning"
-                        : "bg-danger"
-                  }`}
-                />
-                <span className="text-xs font-medium text-foreground">{agentStatus.label}</span>
+              <div className={`health-chip health-chip--${agentStatus.status}`} title={agentStatus.label}>
+                <span className="health-chip-dot" aria-hidden="true" />
+                <span>{statusLabel}</span>
+                <span className="health-chip-detail">{agentStatus.label}</span>
               </div>
             ) : null}
             {actions}
           </div>
         </header>
-        <div className="p-8">{children}</div>
-      </main>
-    </div>
-  );
-}
-
-export function PageTitle({
-  title,
-  subtitle,
-  right,
-}: {
-  title: string;
-  subtitle?: string;
-  right?: ReactNode;
-}) {
-  return (
-    <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">{title}</h1>
-        {subtitle ? <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p> : null}
+        <main id="main-content" className="app-content">{children}</main>
       </div>
-      {right}
     </div>
   );
 }
 
-export function KpiCard({
-  label,
-  value,
-  hint,
-  accent,
-}: {
+export function PageTitle({ title, subtitle, right }: { title: string; subtitle?: string; right?: ReactNode }) {
+  return (
+    <div className="page-heading">
+      <div className="page-heading-copy">
+        <h1 className="page-heading-title">{title}</h1>
+        {subtitle ? <p className="page-heading-description">{subtitle}</p> : null}
+      </div>
+      {right ? <div className="page-heading-actions">{right}</div> : null}
+    </div>
+  );
+}
+
+export function KpiCard({ label, value, hint, accent }: {
   label: string;
   value: string | number;
   hint?: string;
   accent?: "success" | "warning" | "danger" | "primary";
 }) {
-  const accentClass = {
-    success: "border-l-4 border-l-success",
-    warning: "border-l-4 border-l-warning",
-    danger: "border-l-4 border-l-danger",
-    primary: "border-l-4 border-l-primary",
-  }[accent ?? "primary"];
-  const valueColor = {
-    success: "text-foreground",
-    warning: "text-warning-foreground",
-    danger: "text-danger",
-    primary: "text-foreground",
-  }[accent ?? "primary"];
   return (
-    <div className={`rounded-xl border border-border bg-card p-5 shadow-sm ${accent ? accentClass : ""}`}>
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
-      <div className="flex items-end justify-between gap-2">
-        <span className={`text-3xl font-bold ${valueColor}`}>{value}</span>
-        {hint ? <span className="text-sm text-muted-foreground">{hint}</span> : null}
+    <section className={`metric-card metric-card--${accent ?? "neutral"}`} aria-label={`${label}: ${value}`}>
+      <div className="metric-card-topline">
+        <p className="metric-card-label">{label}</p>
+        <span className="metric-card-indicator" aria-hidden="true" />
       </div>
-    </div>
+      <div className="metric-card-bottomline">
+        <span className="metric-card-value">{value}</span>
+        {hint ? <span className="metric-card-hint">{hint}</span> : null}
+      </div>
+    </section>
   );
 }
 
-export function Panel({
-  title,
-  children,
-  right,
-  className = "",
-}: {
+export function Panel({ title, children, right, className = "" }: {
   title?: string;
   children: ReactNode;
   right?: ReactNode;
   className?: string;
 }) {
   return (
-    <div className={`rounded-xl border border-border bg-card shadow-sm ${className}`}>
+    <section className={`content-panel ${className}`}>
       {title || right ? (
-        <div className="flex items-center justify-between border-b border-border px-6 py-4">
-          {title ? <h3 className="font-bold text-foreground">{title}</h3> : <div />}
-          {right}
+        <div className="content-panel-header">
+          {title ? <h2 className="content-panel-title">{title}</h2> : <div />}
+          {right ? <div className="content-panel-actions">{right}</div> : null}
         </div>
       ) : null}
-      <div className="p-6">{children}</div>
+      <div className="content-panel-body">{children}</div>
+    </section>
+  );
+}
+
+
+export function EmptyState({ icon, title, description, action, className = "" }: {
+  icon: ReactNode;
+  title: string;
+  description: string;
+  action?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`empty-state ${className}`}>
+      <span className="empty-state-icon" aria-hidden="true">{icon}</span>
+      <div className="empty-state-copy">
+        <h3>{title}</h3>
+        <p>{description}</p>
+      </div>
+      {action ? <div className="empty-state-action">{action}</div> : null}
     </div>
   );
 }

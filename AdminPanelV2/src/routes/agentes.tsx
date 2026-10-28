@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { AppLayout, PageTitle, Panel } from "@/components/AppLayout";
+import { AppLayout, EmptyState, PageTitle, Panel } from "@/components/AppLayout";
 import { fetchAgents } from "@/lib/api";
 import { Cpu } from "lucide-react";
 
@@ -18,7 +18,7 @@ function Page() {
       <PageTitle title="Agentes locais" subtitle="Último heartbeat recebido pela central para cada cliente." right={<Link to="/clientes" className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Gerenciar clientes</Link>} />
       {error ? <div role="alert" className="mb-5 rounded-lg border border-danger/30 bg-danger-soft p-4 text-sm text-danger">{error instanceof Error ? error.message : "Falha ao carregar agentes."}<button className="ml-3 underline" onClick={() => void refetch()}>Tentar novamente</button></div> : null}
       <Panel title="Conexões">
-        {isLoading ? <p className="text-sm text-muted-foreground">Carregando agentes…</p> : agents.length === 0 ? <p className="text-sm text-muted-foreground">Cadastre um cliente e instale o agente para começar a receber heartbeats.</p> : (
+        {isLoading ? <p className="text-sm text-muted-foreground">Carregando agentes…</p> : agents.length === 0 ? <EmptyState icon={<Cpu size={20} />} title="Nenhum agente conectado" description="Cadastre um cliente e instale o agente para receber comunicação e estado da frota." action={<Link to="/clientes" className="text-sm font-semibold text-primary hover:underline">Gerenciar clientes</Link>} /> : (
           <div className="-mx-6 -mb-6 overflow-x-auto">
             <table className="w-full text-left">
               <thead className="bg-muted/50 text-[11px] font-bold uppercase tracking-wider text-muted-foreground"><tr><th className="px-6 py-3">Cliente / host</th><th className="px-6 py-3">Sub-rede</th><th className="px-6 py-3">Status</th><th className="px-6 py-3">Última comunicação</th></tr></thead>
