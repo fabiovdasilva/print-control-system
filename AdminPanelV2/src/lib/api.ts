@@ -15,9 +15,29 @@ export class ApiError extends Error {
   }
 }
 
+const ADMIN_REQUEST_TIMEOUT_MS = 15_000;
+
 export async function adminFetch(input: string | URL, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
-  const response = await fetch(input, { ...init, headers, credentials: "include" });
+  const timeout = new AbortController();
+  const externalSignal = init.signal;
+  const abortFromCaller = () => timeout.abort();
+  externalSignal?.addEventListener("abort", abortFromCaller, { once: true });
+  const timeoutId = window.setTimeout(() => timeout.abort(), ADMIN_REQUEST_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(input, { ...init, headers, credentials: "include", signal: timeout.signal });
+  } catch (error) {
+    if (timeout.signal.aborted && !externalSignal?.aborted) {
+      throw new ApiError("A central demorou para responder. Confira a conexão e tente novamente.", 408);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+    externalSignal?.removeEventListener("abort", abortFromCaller);
+  }
+
   if (!response.ok) {
     let message = `Falha na comunicação com a central (${response.status}).`;
     try {

@@ -71,10 +71,3 @@ toggle.addEventListener("click", () => {
   toggle!.setAttribute("aria-pressed", String(visible));
   password!.focus();
 });
-
-fetch(`${API_BASE}/auth/session`, { credentials: "include", cache: "no-store" })
-  .then((response) => response.json())
-  .then((result) => {
-    if (result.authenticated) void startApplication();
-  })
-  .catch(() => showError("Não foi possível conectar à central. Confira a rede e tente novamente."));

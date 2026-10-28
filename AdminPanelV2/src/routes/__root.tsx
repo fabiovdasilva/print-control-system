@@ -7,12 +7,10 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import React, { useEffect, type ReactNode } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { API_BASE } from "../lib/api";
 
 function NotFoundComponent() {
   return (
@@ -131,93 +129,9 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AdminPasswordGate>
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
-      </AdminPasswordGate>
+      {/* The lightweight bootstrap validates the password before this SPA is imported. */}
+      <Outlet />
       <Toaster position="top-right" richColors />
     </QueryClientProvider>
-  );
-}
-
-function AdminPasswordGate({ children }: { children: ReactNode }) {
-  const passwordInputRef = React.useRef<HTMLInputElement>(null);
-  const [showPassword, setShowPassword] = React.useState(false);
-  const [authenticated, setAuthenticated] = React.useState(false);
-  const [checking, setChecking] = React.useState(true);
-  const [submitting, setSubmitting] = React.useState(false);
-  const [error, setError] = React.useState("");
-
-  React.useEffect(() => {
-    let active = true;
-    fetch(API_BASE + "/auth/session", { credentials: "include" })
-      .then((response) => response.json())
-      .then((result) => { if (active) setAuthenticated(Boolean(result.authenticated)); })
-      .catch(() => { if (active) setError("Não foi possível conectar à central."); })
-      .finally(() => { if (active) setChecking(false); });
-    return () => { active = false; };
-  }, []);
-
-  async function login(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSubmitting(true);
-    setError("");
-    try {
-      const response = await fetch(API_BASE + "/auth/login", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: passwordInputRef.current?.value ?? "" }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.message || "Não foi possível entrar.");
-      setAuthenticated(true);
-      if (passwordInputRef.current) passwordInputRef.current.value = "";
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Não foi possível entrar.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  if (authenticated) return <>{children}</>;
-
-  return (
-    <main className="grid min-h-screen place-items-center bg-background px-4">
-      <form
-        className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-lg"
-        onSubmit={(event) => { void login(event); }}
-      >
-        <div className="mb-5 grid size-11 place-items-center rounded-xl bg-primary text-lg font-bold text-primary-foreground">P</div>
-        <h1 className="text-xl font-semibold text-foreground">Acesso à central PrintFlow</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Entre com a senha administrativa configurada neste servidor.</p>
-        <label htmlFor="admin-password" className="mt-6 block text-sm font-medium text-foreground">Senha administrativa</label>
-        <div className="relative mt-2">
-          <input
-            id="admin-password"
-            ref={passwordInputRef}
-            type={showPassword ? "text" : "password"}
-            autoComplete="off"
-            className="w-full rounded-lg border border-input bg-background px-3 py-2 pr-11 text-sm outline-none focus:ring-2 focus:ring-ring"
-            required
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword((visible) => !visible)}
-            aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-            aria-pressed={showPassword}
-            className="absolute inset-y-0 right-0 grid w-11 place-items-center rounded-r-lg text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-          </button>
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">A senha fica oculta enquanto você digita. Use o ícone para conferir.</p>
-        {checking ? <p className="mt-3 text-sm text-muted-foreground">Verificando a sessão…</p> : null}
-        {error ? <p role="alert" className="mt-3 text-sm text-danger">{error}</p> : null}
-        <button type="submit" disabled={checking || submitting} className="mt-5 w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60">
-          {submitting ? "Entrando…" : "Entrar"}
-        </button>
-      </form>
-    </main>
   );
 }

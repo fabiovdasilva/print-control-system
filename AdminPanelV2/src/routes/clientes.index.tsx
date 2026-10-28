@@ -26,11 +26,13 @@ function Page() {
       const response = await adminFetch(`${API_BASE}/clients`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newClient) });
       return response.json();
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       toast.success("Cliente cadastrado.");
       setShowCreate(false);
       setNewClient({ name: "", doc: "", email: "", phone: "", address: "", networkSubnets: "", snmpCommunity: "public", pollInterval: 15 });
-      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      // The registration is already confirmed. Refresh the summary in the
+      // background so an intermittent dashboard request cannot trap the form.
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Falha ao cadastrar cliente."),
   });

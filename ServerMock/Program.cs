@@ -46,6 +46,23 @@ var failedAdminLogins = new ConcurrentDictionary<string, AdminLoginThrottle>();
 
 var app = builder.Build();
 app.UseCors("Dashboard");
+app.Use(async (context, next) =>
+{
+    var isEntryDocument = HttpMethods.IsGet(context.Request.Method)
+        && (context.Request.Path == "/" || context.Request.Path == "/index.html");
+    if (isEntryDocument)
+    {
+        context.Response.OnStarting(() =>
+        {
+            // The entry document decides which hashed assets to load. Never allow an
+            // older copy to keep a browser on a stale version of the login or panel.
+            context.Response.Headers.CacheControl = "no-store, max-age=0";
+            context.Response.Headers.Pragma = "no-cache";
+            return Task.CompletedTask;
+        });
+    }
+    await next();
+});
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.Use(async (context, next) =>
@@ -277,14 +294,20 @@ app.MapPost("/api/clients", async (HttpRequest request, AppDbContext db) =>
     string snmp    = doc.RootElement.TryGetProperty("snmpCommunity", out var snm) ? snm.GetString() ?? "public" : "public";
     int poll       = doc.RootElement.TryGetProperty("pollInterval", out var pI) ? pI.GetInt32() : 15;
 
-    var client = new Client { 
-        Name = name, ClientCode = code, Email = email, Phone = phone, 
+    name = name.Trim();
+    if (string.IsNullOrWhiteSpace(name))
+        return Results.BadRequest(new { message = "Informe o nome do cliente." });
+    if (poll is < 1 or > 1440)
+        return Results.BadRequest(new { message = "O intervalo de leitura deve estar entre 1 e 1440 minutos." });
+
+    var client = new Client {
+        Name = name, ClientCode = code, Email = email, Phone = phone,
         Address = address, Plan = plan, OfflineToleranceHours = tol,
         NetworkSubnets = subnets, SnmpCommunity = snmp, PollInterval = poll
     };
     db.Clients.Add(client);
     await db.SaveChangesAsync();
-    return Results.Ok(new { id = client.Id, message = "Cliente criado com sucesso!" });
+    return Results.Created($"/api/clients/{client.Id}", new { id = client.Id, message = "Cliente criado com sucesso!" });
 });
 
 app.MapPut("/api/clients/{id}", async (int id, HttpRequest request, AppDbContext db) =>
@@ -331,18 +354,18 @@ app.MapGet("/api/printers/{id}", async (int id, AppDbContext db) =>
 {
     var p = await db.Printers.Include(p => p.Client).FirstOrDefaultAsync(x => x.Id == id);
     if (p == null) return Results.NotFound();
-    
+
     var today = DateTime.UtcNow.Date;
     var fourteenDaysAgo = today.AddDays(-13);
     var pJobs = await db.PrintJobs.Where(j => j.PrinterId == p.Id && j.PrintedAt >= fourteenDaysAgo).ToListAsync();
-    
+
     var historyArray = new int[14];
     for (int i = 0; i < 14; i++)
     {
         var date = fourteenDaysAgo.AddDays(i);
         historyArray[i] = pJobs.Where(j => j.PrintedAt.Date == date).Sum(j => j.TotalPages);
     }
-    
+
     return Results.Ok(new
     {
         id = p.Id,
@@ -600,10 +623,10 @@ app.MapPost("/api/agent/heartbeat", async (HttpRequest request) =>
         if (!int.TryParse(request.Headers["X-Agent-Client"], out var authenticatedClientId) || authenticatedClientId != clientId)
             return Results.Forbid();
         string hostname = doc.RootElement.TryGetProperty("Hostname", out var hProp) ? hProp.GetString() ?? "Unknown" : "Unknown";
-        
+
         var hosts = agentHeartbeats.GetOrAdd(clientId, _ => new ConcurrentDictionary<string, DateTime>());
         hosts[hostname] = DateTime.UtcNow;
-        
+
         Console.WriteLine($"[HEARTBEAT] Cliente {clientId} ({hostname}) está online — {DateTime.UtcNow:HH:mm:ss}");
     }
     return Results.Ok();
@@ -649,7 +672,7 @@ app.MapGet("/api/agent/{clientId}/status", (int clientId) =>
                 isSpoolerEnabled = cfg.IsSpoolerEnabled
             };
         }).ToList();
-        
+
         bool anyOnline = activeHosts.Any(h => h.isOnline);
         return Results.Ok(new {
             isOnline = anyOnline,
@@ -745,7 +768,7 @@ app.MapPut("/api/agent/{clientId}/{hostname}/config", async (int clientId, strin
     using JsonDocument doc = JsonDocument.Parse(body);
     bool isScanner = doc.RootElement.GetProperty("isScannerEnabled").GetBoolean();
     bool isSpooler = doc.RootElement.GetProperty("isSpoolerEnabled").GetBoolean();
-    
+
     var cfg = GetOrCreateAgentRoleConfig(clientId, hostname);
     cfg.IsScannerEnabled = isScanner;
     cfg.IsSpoolerEnabled = isSpooler;
@@ -888,7 +911,7 @@ app.MapPost("/api/quotas", async (HttpRequest request, AppDbContext db) =>
     using var reader = new StreamReader(request.Body);
     var body = await reader.ReadToEndAsync();
     using JsonDocument doc = JsonDocument.Parse(body);
-    
+
     int clientId = doc.RootElement.GetProperty("clientId").GetInt32();
     string user = doc.RootElement.GetProperty("userName").GetString() ?? "";
     int maxPages = doc.RootElement.GetProperty("maxPages").GetInt32();
