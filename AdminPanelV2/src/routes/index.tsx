@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppLayout, KpiCard, PageTitle, Panel } from "@/components/AppLayout";
-import { VolumeChart } from "@/components/VolumeChart";
+import { lazy, Suspense } from "react";
 import { AlertsList } from "@/components/AlertsList";
 import { useQuery } from "@tanstack/react-query";
 import { fetchDashboardTotals, fetchClients, fetchPrinters } from "@/lib/api";
 import { ArrowRight, Building2, Printer } from "lucide-react";
+const VolumeChart = lazy(() => import("@/components/VolumeChart").then((module) => ({ default: module.VolumeChart })));
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -20,7 +21,9 @@ function Page() {
   const { data: dashboard, isLoading, error, refetch } = useQuery({
     queryKey: ['dashboard'],
     queryFn: fetchDashboardTotals,
-    refetchInterval: 15000
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
+    staleTime: 10000,
   });
 
   if (isLoading) return <div className="p-8 flex justify-center items-center h-screen">Carregando dados da central…</div>;
@@ -89,7 +92,15 @@ pagesToday: cPrinters.reduce((acc: number, p: any) => acc + (p.pagesToday || 0),
           right={<span className="text-xs text-muted-foreground">Últimos 14 dias · trabalhos registrados</span>}
           className="lg:col-span-2"
         >
-          <VolumeChart />
+          <Suspense
+            fallback={
+              <div className="flex h-[260px] items-center justify-center text-sm text-muted-foreground">
+                Carregando gráfico…
+              </div>
+            }
+          >
+            <VolumeChart />
+          </Suspense>
         </Panel>
         <Panel title="Alertas Recentes">
           <AlertsList alerts={realAlerts.slice(0, 5)} />
