@@ -138,8 +138,8 @@ function NewClientPage() {
             <label className="grid gap-1.5 text-sm font-medium">Telefone<input name="phone" type="tel" className="min-h-10 border border-input px-3 py-2" /></label>
             <label className="grid gap-1.5 text-sm font-medium">Endereço<input name="address" className="min-h-10 border border-input px-3 py-2" /></label>
             <label className="grid gap-1.5 text-sm font-medium">Sub-redes para descoberta<input name="networkSubnets" className="min-h-10 border border-input px-3 py-2" /><span className="text-xs font-normal text-muted-foreground">Use CIDR e separe várias redes por vírgula.</span></label>
-            <label className="grid gap-1.5 text-sm font-medium">Comunidade SNMP<input name="snmpCommunity" placeholder="public" defaultValue="public" className="min-h-10 border border-input px-3 py-2" /></label>
-            <label className="grid gap-1.5 text-sm font-medium">Intervalo de leitura (minutos)<input name="pollInterval" type="number" min={1} max={1440} placeholder="15" defaultValue="15" className="min-h-10 border border-input px-3 py-2" /></label>
+            <label className="grid gap-1.5 text-sm font-medium">Comunidade SNMP<input name="snmpCommunity" placeholder="public" className="min-h-10 border border-input px-3 py-2" /></label>
+            <label className="grid gap-1.5 text-sm font-medium">Intervalo de leitura (minutos)<input name="pollInterval" type="number" min={1} max={1440} placeholder="15" className="min-h-10 border border-input px-3 py-2" /></label>
           </div>
           <p role="alert" className="min-h-5 text-sm text-danger">{submitError}</p>
           <div className="flex justify-end gap-3 border-t border-border pt-5">
